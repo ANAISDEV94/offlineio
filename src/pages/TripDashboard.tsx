@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft } from "lucide-react";
-import { sampleTrip, sampleMembers } from "@/lib/sample-data";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import PlanTab from "@/components/tabs/PlanTab";
 import PayTab from "@/components/tabs/PayTab";
 import BookTab from "@/components/tabs/BookTab";
@@ -14,11 +14,66 @@ import HypeTab from "@/components/tabs/HypeTab";
 
 const TripDashboard = () => {
   const navigate = useNavigate();
-  const trip = sampleTrip;
-  const members = sampleMembers;
+  const { tripId } = useParams<{ tripId: string }>();
+
+  const { data: trip, isLoading: tripLoading, error: tripError } = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", tripId!)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Trip not found");
+      return data;
+    },
+    enabled: !!tripId,
+  });
+
+  const { data: members = [] } = useQuery({
+    queryKey: ["trip-members", tripId],
+    queryFn: async () => {
+      const { data: memberRows, error } = await supabase
+        .from("trip_members")
+        .select("*")
+        .eq("trip_id", tripId!);
+      if (error) throw error;
+
+      const userIds = memberRows.map((m) => m.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, avatar_url")
+        .in("user_id", userIds);
+
+      return memberRows.map((m) => ({
+        ...m,
+        profile: profiles?.find((p) => p.user_id === m.user_id) || { display_name: null, avatar_url: null },
+      }));
+    },
+    enabled: !!tripId,
+  });
+
+  if (tripLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (tripError || !trip) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-4xl">😢</p>
+        <p className="text-foreground font-semibold">Trip not found</p>
+        <button onClick={() => navigate("/")} className="text-primary text-sm">← Back home</button>
+      </div>
+    );
+  }
 
   const daysUntil = Math.ceil(
-    (new Date(trip.startDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    (new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
 
   const avatarColors = ["bg-primary/20", "bg-lavender", "bg-peach", "bg-mint", "bg-blush"];
@@ -45,9 +100,9 @@ const TripDashboard = () => {
 
           <div className="flex justify-center mt-4 -space-x-2">
             {members.map((m, i) => (
-              <Avatar key={m.id} className={`h-9 w-9 border-2 border-background ${avatarColors[i]}`}>
+              <Avatar key={m.id} className={`h-9 w-9 border-2 border-background ${avatarColors[i % avatarColors.length]}`}>
                 <AvatarFallback className="text-xs font-semibold bg-transparent text-foreground">
-                  {m.displayName.slice(0, 2).toUpperCase()}
+                  {(m.profile?.display_name || "??").slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             ))}
