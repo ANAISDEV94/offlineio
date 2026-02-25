@@ -44,7 +44,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const totalFunded = payments.reduce((s, m) => s + Number(m.amount_paid), 0);
   const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
 
-  // Trip Health Score
   const membersOnTrack = payments.filter((p) => {
     const pct = Number(p.amount) > 0 ? Number(p.amount_paid) / Number(p.amount) : 0;
     return pct >= 0.5 || p.status === "paid";
@@ -53,12 +52,10 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const healthScore = Math.round((pctFunded * 0.5) + (memberPct * 0.3) + 20);
   const healthLabel = healthScore >= 80 ? "On Track" : healthScore >= 50 ? "Needs Attention" : "Behind";
 
-  // Public trip: spots progress
   const isPublic = trip?.visibility === "public";
   const minSpotsRequired = trip?.min_spots_required;
   const fullyFundedMembers = payments.filter(p => Number(p.amount) > 0 && Number(p.amount_paid) >= Number(p.amount)).length;
 
-  // Deadline countdown
   const deadlineDays = trip?.payment_deadline
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
@@ -67,7 +64,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  // SVG ring dimensions
   const size = 160;
   const stroke = 12;
   const radius = (size - stroke) / 2;
@@ -76,9 +72,8 @@ const FundTab = ({ tripId }: FundTabProps) => {
 
   return (
     <div className="space-y-5">
-      {/* Circular Progress */}
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-        <Card className="border-0 shadow-lg glass-card">
+        <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-6 flex flex-col items-center">
             <div className="relative" style={{ width: size, height: size }}>
               <svg width={size} height={size} className="-rotate-90">
@@ -95,7 +90,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-display font-bold">{pctFunded}%</span>
+                <span className="text-3xl font-display font-semibold">{pctFunded}%</span>
                 <span className="text-xs text-muted-foreground">funded</span>
               </div>
             </div>
@@ -108,43 +103,40 @@ const FundTab = ({ tripId }: FundTabProps) => {
         </Card>
       </motion.div>
 
-      {/* Public Trip: Spots Progress */}
       {isPublic && minSpotsRequired && (
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
               <div>
-                <p className="text-sm font-semibold">{fullyFundedMembers} / {minSpotsRequired} minimum spots funded</p>
+                <p className="text-sm font-medium">{fullyFundedMembers} / {minSpotsRequired} minimum spots funded</p>
                 <p className="text-[10px] text-muted-foreground">Trip activates when minimum is reached</p>
               </div>
             </div>
             <Badge variant={fullyFundedMembers >= minSpotsRequired ? "default" : "secondary"} className="text-[10px]">
-              {fullyFundedMembers >= minSpotsRequired ? "✨ Activated" : `${minSpotsRequired - fullyFundedMembers} more needed`}
+              {fullyFundedMembers >= minSpotsRequired ? "Activated" : `${minSpotsRequired - fullyFundedMembers} more needed`}
             </Badge>
           </CardContent>
         </Card>
       )}
 
-      {/* Trip Health */}
       <Card className="border-0 shadow-sm glass-card">
         <CardContent className="p-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold">Trip Health</p>
+            <p className="text-sm font-medium">Trip Health</p>
             <p className="text-xs text-muted-foreground">{healthScore}% — {healthLabel}</p>
           </div>
           <Badge variant={healthScore >= 80 ? "default" : "secondary"} className="text-xs">
-            {healthScore >= 80 ? "✨" : "⚠️"} {healthLabel}
+            {healthLabel}
           </Badge>
         </CardContent>
       </Card>
 
-      {/* Deadline + Escrow + No-Drama */}
       <div className="flex flex-wrap gap-3">
         {deadlineDays !== null && (
           <Card className="border-0 shadow-sm flex-1 min-w-[140px]">
             <CardContent className="p-3 text-center">
-              <p className="text-lg font-bold">{deadlineDays > 0 ? deadlineDays : 0}</p>
+              <p className="text-lg font-display font-semibold">{deadlineDays > 0 ? deadlineDays : 0}</p>
               <p className="text-[10px] text-muted-foreground">days until funding deadline</p>
             </CardContent>
           </Card>
@@ -155,7 +147,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
               <Card className="border-0 shadow-sm flex-1 min-w-[140px] cursor-help">
                 <CardContent className="p-3 text-center flex flex-col items-center gap-1">
                   <Shield className="h-5 w-5 text-primary" />
-                  <p className="text-[10px] font-semibold">🛡 Funds Protected</p>
+                  <p className="text-[10px] font-medium">Funds Protected</p>
                 </CardContent>
               </Card>
             </TooltipTrigger>
@@ -167,14 +159,13 @@ const FundTab = ({ tripId }: FundTabProps) => {
       </div>
 
       <div className="flex items-center justify-between px-1">
-        <span className="text-sm font-medium">No-Drama Mode 🤫</span>
+        <span className="text-sm font-medium">No-Drama Mode</span>
         <Switch checked={noDrama} onCheckedChange={setNoDrama} />
       </div>
 
-      {/* Installment Plan */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
-          <p className="text-sm font-semibold mb-2">Installment Plan</p>
+          <p className="text-sm font-medium mb-2">Installment Plan</p>
           <Select defaultValue="monthly">
             <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -187,7 +178,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
         </CardContent>
       </Card>
 
-      {/* Member Cards */}
       {payments.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-3xl mb-2">💰</p>
@@ -196,17 +186,17 @@ const FundTab = ({ tripId }: FundTabProps) => {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Members</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Members</p>
           {payments.map((m, i) => {
             const pct = Number(m.amount) > 0 ? Math.round((Number(m.amount_paid) / Number(m.amount)) * 100) : 0;
             const status = pct >= 100 ? "Paid in Full" : pct >= 50 ? "On Track" : "Behind";
-            const statusColor = pct >= 100 ? "bg-mint/50" : pct >= 50 ? "bg-lavender/50" : "bg-peach/50";
+            const statusColor = pct >= 100 ? "bg-accent/20" : pct >= 50 ? "bg-secondary" : "bg-primary/10";
             return (
               <motion.div key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Card className="border-0 shadow-sm">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold">{m.displayName}</p>
+                      <p className="text-sm font-medium">{m.displayName}</p>
                       {noDrama ? (
                         <p className="text-xs text-muted-foreground">{pct}% complete</p>
                       ) : (

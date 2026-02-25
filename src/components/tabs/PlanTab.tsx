@@ -66,7 +66,6 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
   });
 
-  // Host controls: members with payments
   const { data: memberPayments = [] } = useQuery({
     queryKey: ["host-member-payments", tripId],
     queryFn: async () => {
@@ -112,7 +111,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
     onSuccess: () => {
       setAnnouncement("");
-      toast({ title: "Announcement sent! 📢" });
+      toast({ title: "Announcement sent" });
     },
   });
 
@@ -139,7 +138,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       queryClient.invalidateQueries({ queryKey: ["itinerary-items", tripId] });
       setNewActivity("");
       setNewTime("");
-      toast({ title: "Added! 📋" });
+      toast({ title: "Added to itinerary" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -156,22 +155,20 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  // Health score (reused from FundTab logic)
   const totalGoal = memberPayments.reduce((s, m) => s + Number(m.payment?.amount || 0), 0);
   const totalFunded = memberPayments.reduce((s, m) => s + Number(m.payment?.amount_paid || 0), 0);
   const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      {/* Host Controls - only for public trip host */}
       {isHost && isPublicTrip && (
         <Collapsible open={hostControlsOpen} onOpenChange={setHostControlsOpen}>
           <CollapsibleTrigger asChild>
-            <Card className="border-0 shadow-md cursor-pointer bg-gradient-to-r from-primary/5 to-lavender/10">
+            <Card className="border-0 shadow-sm cursor-pointer bg-primary/5">
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Crown className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold">Host Controls</span>
+                  <span className="text-sm font-medium">Host Controls</span>
                   <Badge variant="secondary" className="text-[10px]">{memberPayments.length} members</Badge>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${hostControlsOpen ? "rotate-180" : ""}`} />
@@ -180,23 +177,21 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 mt-3">
-              {/* Health Score */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold">Trip Health</p>
+                    <p className="text-sm font-medium">Trip Health</p>
                     <p className="text-xs text-muted-foreground">{pctFunded}% funded</p>
                   </div>
                   <Badge variant={pctFunded >= 80 ? "default" : "secondary"} className="text-xs">
-                    {pctFunded >= 80 ? "✨ On Track" : "⚠️ Needs Attention"}
+                    {pctFunded >= 80 ? "On Track" : "Needs Attention"}
                   </Badge>
                 </CardContent>
               </Card>
 
-              {/* Participant Funding */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Participant Funding</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Participant Funding</p>
                   {memberPayments.map(m => {
                     const pct = m.payment && Number(m.payment.amount) > 0
                       ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100)
@@ -226,10 +221,9 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 </CardContent>
               </Card>
 
-              {/* Adjust Deadline */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Adjust Deadline</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adjust Deadline</p>
                   <div className="flex gap-2">
                     <Input
                       type="date"
@@ -244,10 +238,9 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 </CardContent>
               </Card>
 
-              {/* Send Announcement */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Send Announcement</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Send Announcement</p>
                   <div className="flex gap-2">
                     <Input
                       placeholder="Message to all members..."
@@ -266,9 +259,8 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </Collapsible>
       )}
 
-      {/* Trip Templates */}
       <div>
-        <h3 className="font-display font-bold text-base mb-3 flex items-center gap-2">
+        <h3 className="font-display font-medium text-base mb-3 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" /> Trip Templates
         </h3>
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide">
@@ -276,13 +268,13 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
             <Card
               key={t.name}
               className={`border-2 shrink-0 w-36 cursor-pointer transition-all ${
-                selectedTemplate === t.name ? "border-primary shadow-md" : "border-transparent hover:border-muted"
+                selectedTemplate === t.name ? "border-primary shadow-sm" : "border-transparent hover:border-muted"
               }`}
               onClick={() => setSelectedTemplate(selectedTemplate === t.name ? null : t.name)}
             >
               <CardContent className="p-3 text-center">
                 <span className="text-2xl">{t.emoji}</span>
-                <p className="text-xs font-semibold mt-1">{t.name}</p>
+                <p className="text-xs font-medium mt-1">{t.name}</p>
                 <p className="text-[10px] text-muted-foreground">${t.budget}</p>
               </CardContent>
             </Card>
@@ -290,9 +282,9 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </div>
         {selectedTemplate && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
-            <Card className="border-0 shadow-sm mt-2 bg-lavender/10">
+            <Card className="border-0 shadow-sm mt-2 bg-secondary/30">
               <CardContent className="p-3">
-                <p className="text-xs font-semibold">{selectedTemplate} Vibes:</p>
+                <p className="text-xs font-medium">{selectedTemplate} Vibes:</p>
                 <p className="text-xs text-muted-foreground">
                   {tripTemplates.find((t) => t.name === selectedTemplate)?.vibes.join(", ")}
                 </p>
@@ -302,11 +294,10 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         )}
       </div>
 
-      {/* Budget Overview */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 shadow-md">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-display">Budget Breakdown</CardTitle>
+            <CardTitle className="text-lg font-display font-medium">Budget Breakdown</CardTitle>
             {totalBudget > 0 && (
               <p className="text-sm text-muted-foreground">
                 ${totalSpent.toLocaleString()} of ${totalBudget.toLocaleString()} spent
@@ -331,10 +322,9 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </Card>
       </motion.div>
 
-      {/* Add Itinerary Item */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4 space-y-3">
-          <p className="text-sm font-semibold">Add to Itinerary</p>
+          <p className="text-sm font-medium">Add to Itinerary</p>
           <div className="flex gap-2">
             <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
             <Input value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-24" placeholder="Time" />
@@ -346,15 +336,14 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </CardContent>
       </Card>
 
-      {/* Itinerary */}
       {Object.keys(days).length > 0 ? (
         <div>
-          <h3 className="font-display font-bold text-lg mb-3">Day-by-Day Itinerary</h3>
+          <h3 className="font-display font-medium text-lg mb-3">Day-by-Day Itinerary</h3>
           <div className="space-y-4">
             {Object.entries(days).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
               <motion.div key={day} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Number(day) * 0.1 }}>
                 <Card className="border-0 shadow-sm">
-                  <CardHeader className="pb-2"><CardTitle className="text-base font-display">Day {day}</CardTitle></CardHeader>
+                  <CardHeader className="pb-2"><CardTitle className="text-base font-display font-medium">Day {day}</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     {items.map((item) => (
                       <div key={item.id} className="flex gap-3">
@@ -374,7 +363,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       ) : (
         <div className="text-center py-8">
           <p className="text-3xl mb-2">📋</p>
-          <p className="text-sm text-muted-foreground">No itinerary items yet. Add your first activity above!</p>
+          <p className="text-sm text-muted-foreground">No itinerary items yet. Add your first activity above.</p>
         </div>
       )}
     </div>

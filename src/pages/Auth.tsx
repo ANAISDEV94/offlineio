@@ -34,7 +34,7 @@ const Auth = () => {
         });
         if (error) throw error;
         toast({
-          title: "Check your email, babe! 💌",
+          title: "Check your email ✉️",
           description: "We sent you a confirmation link to verify your account.",
         });
       } else {
@@ -44,7 +44,7 @@ const Auth = () => {
       }
     } catch (error: any) {
       toast({
-        title: "Oops! 😬",
+        title: "Something went wrong",
         description: error.message,
         variant: "destructive",
       });
@@ -69,19 +69,19 @@ const Auth = () => {
           >
             <Plane className="h-10 w-10 text-primary mx-auto" />
           </motion.div>
-          <h1 className="text-4xl font-display font-bold text-foreground tracking-tight">
-            DÉPARTE
+          <h1 className="text-4xl font-display font-semibold text-foreground tracking-wide">
+            Offline
           </h1>
-          <p className="text-muted-foreground mt-2">Plan your dream girls' trip ✨</p>
+          <p className="text-muted-foreground mt-2">Log off. Lock in.</p>
         </div>
 
-        <Card className="border-0 shadow-lg shadow-primary/10">
+        <Card className="border-0 shadow-sm">
           <CardHeader className="text-center pb-2">
-            <CardTitle className="font-display text-xl">
-              {isSignUp ? "Join the squad 💅" : "Welcome back, queen 👑"}
+            <CardTitle className="font-display text-xl font-medium">
+              {isSignUp ? "Create your account" : "Welcome back"}
             </CardTitle>
             <CardDescription>
-              {isSignUp ? "Create your account to start planning" : "Sign in to your account"}
+              {isSignUp ? "Start planning your next trip" : "Sign in to your account"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -91,7 +91,7 @@ const Auth = () => {
                   <Label htmlFor="displayName">Display Name</Label>
                   <Input
                     id="displayName"
-                    placeholder="Your name, babe"
+                    placeholder="Your name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="rounded-xl"
@@ -126,10 +126,10 @@ const Auth = () => {
               </div>
               <Button
                 type="submit"
-                className="w-full rounded-xl h-12 text-base font-semibold"
+                className="w-full rounded-xl h-12 text-base font-medium"
                 disabled={loading}
               >
-                {loading ? "One sec..." : isSignUp ? "Sign Up ✨" : "Sign In 💖"}
+                {loading ? "One moment..." : isSignUp ? "Sign Up" : "Sign In"}
               </Button>
             </form>
             <div className="mt-6 text-center">
