@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Users, Plus, ArrowRight, Loader2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import AppTour from "@/components/AppTour";
 
@@ -15,11 +15,13 @@ const Onboarding = () => {
   const [joinCode, setJoinCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [joining, setJoining] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signOut, user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Check onboarding_completed flag
   const { data: profile } = useQuery({
     queryKey: ["profile-onboarding", user?.id],
     queryFn: async () => {
@@ -33,8 +35,7 @@ const Onboarding = () => {
     enabled: !!user,
   });
 
-  // Show tour automatically for new users
-  const shouldShowTour = profile && !(profile as any).onboarding_completed && !showTour;
+  const shouldShowTour = !dismissed && profile && !profile.onboarding_completed;
 
   const { data: myTrips = [], isLoading } = useQuery({
     queryKey: ["my-trips", user?.id],
@@ -57,17 +58,54 @@ const Onboarding = () => {
     enabled: !!user,
   });
 
-  const handleJoinTrip = () => {
-    if (!joinCode.trim()) return;
-    toast({ title: "Looking for your trip... 🔍" });
-    navigate("/trip/sample");
+  const handleTourComplete = () => {
+    setDismissed(true);
+    setShowTour(false);
+    queryClient.invalidateQueries({ queryKey: ["profile-onboarding", user?.id] });
+  };
+
+  const handleJoinTrip = async () => {
+    if (!joinCode.trim() || !user) return;
+    setJoining(true);
+    try {
+      const { data: trip, error } = await supabase
+        .from("trips")
+        .select("id, name")
+        .eq("invite_code", joinCode.trim())
+        .maybeSingle();
+      if (error) throw error;
+      if (!trip) {
+        toast({ title: "Trip not found 😢", description: "Double-check the invite code and try again.", variant: "destructive" });
+        return;
+      }
+      // Check if already a member
+      const { data: existing } = await supabase
+        .from("trip_members")
+        .select("id")
+        .eq("trip_id", trip.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!existing) {
+        const { error: joinError } = await supabase
+          .from("trip_members")
+          .insert({ trip_id: trip.id, user_id: user.id, role: "member" });
+        if (joinError) throw joinError;
+      }
+      toast({ title: "You're in! 🎉", description: `Welcome to ${trip.name}!` });
+      queryClient.invalidateQueries({ queryKey: ["my-trips"] });
+      navigate(`/trip/${trip.id}`);
+    } catch (err: any) {
+      toast({ title: "Oops!", description: err.message, variant: "destructive" });
+    } finally {
+      setJoining(false);
+    }
   };
 
   return (
     <>
       <AnimatePresence>
         {(shouldShowTour || showTour) && user && (
-          <AppTour userId={user.id} onComplete={() => setShowTour(false)} />
+          <AppTour userId={user.id} onComplete={handleTourComplete} />
         )}
       </AnimatePresence>
       <div className="min-h-screen bg-background flex flex-col">
@@ -143,14 +181,16 @@ const Onboarding = () => {
                   placeholder="Enter invite code 💌"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinTrip()}
                   className="rounded-xl"
                 />
-                <Button onClick={handleJoinTrip} className="rounded-xl px-6">Join</Button>
+                <Button onClick={handleJoinTrip} disabled={joining} className="rounded-xl px-6">
+                  {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : "Join"}
+                </Button>
               </div>
             </motion.div>
           )}
 
-          {/* My Trips */}
           {isLoading && (
             <div className="flex justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -185,7 +225,6 @@ const Onboarding = () => {
               })}
             </motion.div>
           )}
-          {/* How it works link */}
           <button
             onClick={() => setShowTour(true)}
             className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors pt-2"
