@@ -9,10 +9,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import OverviewTab from "@/components/tabs/OverviewTab";
 import FundTab from "@/components/tabs/FundTab";
 import PlanTab from "@/components/tabs/PlanTab";
 import UnlockTab from "@/components/tabs/UnlockTab";
 import HypeTab from "@/components/tabs/HypeTab";
+import MyTripTab from "@/components/tabs/MyTripTab";
 
 const TripDashboard = () => {
   const navigate = useNavigate();
@@ -174,19 +176,23 @@ const TripDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="fund" className="px-2 mt-2">
+      <Tabs defaultValue="overview" className="px-2 mt-2">
         <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
-          <TabsTrigger value="fund" className="rounded-xl text-xs data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
-          <TabsTrigger value="plan" className="rounded-xl text-xs data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
-          <TabsTrigger value="unlock" className="rounded-xl text-xs data-[state=active]:shadow-sm">🔓 Unlock</TabsTrigger>
-          <TabsTrigger value="hype" className="rounded-xl text-xs data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
+          <TabsTrigger value="overview" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📊 Overview</TabsTrigger>
+          <TabsTrigger value="fund" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
+          <TabsTrigger value="plan" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
+          <TabsTrigger value="unlock" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🔓 Unlock</TabsTrigger>
+          <TabsTrigger value="hype" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
+          <TabsTrigger value="me" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">👤 Me</TabsTrigger>
         </TabsList>
 
         <div className="mt-4 px-2">
+          <TabsContent value="overview"><OverviewTab tripId={tripId!} /></TabsContent>
           <TabsContent value="fund"><FundTab tripId={tripId!} /></TabsContent>
           <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
           <TabsContent value="unlock"><UnlockTab tripId={tripId!} /></TabsContent>
           <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="me"><MyTripTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>
     </div>
