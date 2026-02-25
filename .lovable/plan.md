@@ -1,75 +1,158 @@
 
+# Major Refactor: 4-Pillar Architecture + UX Fixes + Visual Upgrade
 
-# End-to-End Fix: Make Everything Work
+This is a large overhaul touching nearly every file. Here's what changes, organized by priority.
 
-## Issues Found
+---
 
-### 1. "Let's Go" button does nothing (Critical)
-The AppTour's `onComplete` callback calls `setShowTour(false)`, but `showTour` is already `false` when the tour auto-shows. The auto-show condition (`shouldShowTour`) stays true because the cached profile query still has `onboarding_completed: false`. The database update happens but the UI never refreshes.
+## Phase 1: Critical Bug Fixes
 
-**Fix:** Add a local `dismissed` state in Onboarding and invalidate the profile query cache when the tour completes, so the overlay actually disappears.
+### 1A. Fix RLS Policy for Trip Creation
+The "new row violates row-level security policy for table trips" error happens because the `trips` SELECT policy uses `is_trip_member(auth.uid(), id)`, but the `trip_members` row hasn't been inserted yet when the trip is first created. The insert policy works fine, but the `.select().single()` call after insert fails because the user can't read the trip yet.
 
-### 2. All dashboard tabs show hardcoded sample data
-PlanTab, PayTab, BookTab, PackTab, and FitsTab all import from `sample-data.ts` instead of fetching real trip data from the database. When you create a trip and land on its dashboard, every tab shows fake Italian trip data instead of your actual trip.
+**Fix:** Insert the trip without `.select().single()`, then insert `trip_members`, then fetch the trip separately. Alternatively, restructure so the trip insert returns just the `id` using a raw RPC or by changing the flow.
 
-**Fix:** Pass the `tripId` prop to each tab component and have them fetch real data from the database. Show empty states with "add" actions when there's no data yet (which is the normal state for a freshly created trip).
+**Database migration:** No schema changes needed -- the RLS policies are correct. The code just needs to stop chaining `.select()` on the insert.
 
-### 3. Join Trip flow is hardcoded
-The "Join" button navigates to `/trip/sample` instead of looking up the invite code in the database.
+### 1B. Fix Group Size Limit
+Remove the `Math.min(20, ...)` cap on group size in `CreateTrip.tsx` so users can add as many people as they want.
 
-**Fix:** Query the `trips` table by `invite_code`, add the user as a `trip_member`, then navigate to the real trip.
+### 1C. Fix AppTour Showing After Signup
+Update `Auth.tsx` so that after signup confirmation and first login, the user is routed to `/` where the `Onboarding` component will auto-show the `AppTour` (it already does this based on `onboarding_completed: false`). The flow already works -- the issue is just that email confirmation redirects to `/auth` which then navigates to `/` on successful session detection.
 
-## Changes
+---
 
-### File: `src/components/Onboarding.tsx`
-- Add a `dismissed` state variable that starts as `false`
-- When AppTour completes, set `dismissed` to `true` AND invalidate the `profile-onboarding` query
-- Update the tour visibility condition to also check `!dismissed`
-- Fix Join Trip to query by `invite_code` from the `trips` table, insert into `trip_members`, and navigate to the matched trip
+## Phase 2: Create Trip UX Improvements
 
-### File: `src/components/AppTour.tsx`
-- Accept an optional `onComplete` callback (already does) -- no changes needed here
+### 2A. Destination Autocomplete
+Replace the plain text input with a searchable combobox (using the existing `cmdk` / `Command` component already installed) that queries a static list of world cities/countries. Since we don't want an external API dependency, we'll embed a curated list of ~500 popular destinations (city + country) and filter client-side as the user types.
 
-### File: `src/pages/TripDashboard.tsx`
-- Pass `tripId` as a prop to all six tab components
+**New file:** `src/lib/destinations.ts` -- a static array of `{ city, country, emoji }` entries covering all continents.
 
-### File: `src/components/tabs/PlanTab.tsx`
-- Accept `tripId` prop
-- Fetch `itinerary_items` and `budget_categories` from the database for this trip
-- Show empty states with "Add" buttons when no data exists
-- Allow adding itinerary items and editing budget categories
+**Changes to `CreateTrip.tsx`:** Replace the destination `Input` with a `Popover` + `Command` combo that filters the list as you type, showing results like "Rome, Italy" with flag emojis.
 
-### File: `src/components/tabs/PayTab.tsx`
-- Accept `tripId` prop
-- Fetch `payments` and `trip_members` (with profiles) from the database
-- Show real payment status per member instead of sample data
-- Keep the organizer toggle and nudge functionality
+### 2B. Multi-Select Vibe Picker
+Change the vibe step from single-select to multi-select. Update the `form.vibe` state from a string to a `string[]`. The selected vibes will be joined with commas when saved to the database (the `vibe` column is already `text` type, so comma-separated works fine).
 
-### File: `src/components/tabs/BookTab.tsx`
-- Accept `tripId` prop
-- Fetch `bookings` from the database for this trip
-- Show empty state with an "Add Booking" form
-- Allow adding new bookings (flights, hotels, activities)
+### 2C. Fix "Soft Life" Vibe
+Change the Soft Life option from `🧘‍♀️` to `🧖‍♀️` (spa/pampering emoji) and keep the label as "Soft Life".
 
-### File: `src/components/tabs/PackTab.tsx`
-- Accept `tripId` prop
-- Fetch `packing_items` from the database for the current user and trip
-- Persist checkbox state to the database
-- Allow adding new items that save to the database
+### 2D. Add Back Button to Wizard Steps
+Add a "Back" button next to the "Next" button at the bottom of each step (not just the arrow in the header). The first step won't show a Back button.
 
-### File: `src/components/tabs/FitsTab.tsx`
-- Accept `tripId` prop
-- Fetch `outfit_posts` and `outfit_reactions` from the database
-- Show empty state until outfits are posted
+---
 
-### File: `src/components/tabs/HypeTab.tsx`
-- Accept `tripId` prop
-- Calculate countdown based on real trip dates (already received from parent)
-- Fetch `notifications` from the database
+## Phase 3: 4-Pillar Navigation Refactor
 
-## Technical Notes
+Restructure the 6 tabs (Plan, Pay, Book, Pack, Fits, Hype) into 4 tabs:
 
-- All tab queries use `useQuery` with `tripId` in the query key for proper caching
-- Empty states use friendly copy and "Add" CTAs so a freshly created trip feels useful, not broken
-- The `sample-data.ts` imports will be removed from all tab components
-- No database schema changes needed -- all tables already exist with proper RLS policies
+| New Tab | Contains | Old Tabs |
+|---------|----------|----------|
+| **FUND** | Payment tracking, installment plans, trip health score, escrow badge, no-drama mode | Pay |
+| **PLAN** | Trip templates, budget breakdown, day-by-day itinerary | Plan |
+| **UNLOCK** | Locked booking gate (unlocks at 100% funded), flights/hotels/experiences | Book |
+| **HYPE** | Countdown, hype messages, outfit board (Fits), packing checklist (Pack) | Hype + Fits + Pack |
+
+### 3A. FUND Tab (New `src/components/tabs/FundTab.tsx`)
+- Large circular progress indicator (SVG ring) showing % funded, total funded, total goal
+- Member funding cards with name, % complete, status badge ("On Track" / "Behind" / "Paid in Full")
+- Trip Health Score (0-100%) based on % funded, % members on schedule, days remaining
+- Installment plan selector (Weekly, Biweekly, Monthly, Custom)
+- Funding deadline countdown ("12 days until funding deadline")
+- Escrow Protection Badge with tooltip
+- "No-Drama Mode" toggle that hides dollar amounts and shows only percentages
+
+### 3B. PLAN Tab (Updated `src/components/tabs/PlanTab.tsx`)
+- Trip Type Templates section at top (Soft Girl Summer, Birthday Reset, Bachelorette Energy, Girls Gone Global, Healing Escape)
+- Selecting a template auto-suggests budget ranges and itinerary structure
+- Keep existing budget breakdown and itinerary features
+- Clean, calm layout
+
+### 3C. UNLOCK Tab (New `src/components/tabs/UnlockTab.tsx`)
+- Check trip funding percentage from payments data
+- If < 100%: show locked state with message and progress
+- If = 100%: unlock with confetti animation, show Flights/Hotels/Experiences sections
+- Reuse booking add/view logic from current BookTab
+
+### 3D. HYPE Tab (Updated `src/components/tabs/HypeTab.tsx`)
+- Countdown section (keep existing)
+- Outfit Board section (merge FitsTab content including photo uploads)
+- Packing Checklist section (merge PackTab content)
+- Keep visually playful
+
+### 3E. Update `TripDashboard.tsx`
+- Replace 6 tabs with 4: FUND, PLAN, UNLOCK, HYPE
+- Update tab icons and labels
+
+---
+
+## Phase 4: Outfit Photo Uploads
+
+### 4A. Enable File Upload in FitsTab (now inside HypeTab)
+- Use the existing `outfits` storage bucket (already public)
+- Add a file input that uploads to `outfits/{tripId}/{userId}/{filename}`
+- After upload, get the public URL and insert into `outfit_posts`
+- Add occasion selector (Dinner, Beach, Night Out, Airport) and caption input
+
+**Database migration:** Add storage RLS policies for the `outfits` bucket so authenticated trip members can upload.
+
+---
+
+## Phase 5: Visual Upgrade -- Girly Glass Aesthetic
+
+### 5A. Glassmorphism Utility Classes
+Add glass effect CSS classes to `index.css`:
+- `.glass` -- `backdrop-blur-xl bg-white/40 border border-white/20 shadow-lg`
+- `.glass-card` -- same with rounded corners
+
+### 5B. Apply Glass Effects
+- Onboarding CTA cards (Create Trip, Join Trip) -- glass effect
+- Dashboard tab bar -- glass effect
+- Buttons on key actions -- glass border + blur background
+- AppTour slides -- glass card styling
+
+### 5C. Enhanced Color Palette
+- Slightly richer gradients
+- More prominent use of lavender, blush, peach, mint
+- Subtle gradient backgrounds on cards
+- Softer shadows with color tinting
+
+### 5D. Typography & Spacing
+- More generous spacing between sections
+- Consistent rounded-2xl on all cards
+- Subtle hover animations on interactive elements
+
+---
+
+## Phase 6: Update AppTour for New 4-Tab Structure
+
+Update the tour slides to reflect the new FUND / PLAN / UNLOCK / HYPE structure instead of the old 6 tabs.
+
+---
+
+## Files Summary
+
+### New files:
+- `src/lib/destinations.ts` -- Static destination list (~500 cities)
+- `src/components/tabs/FundTab.tsx` -- FUND tab component
+- `src/components/tabs/UnlockTab.tsx` -- UNLOCK tab component
+
+### Modified files:
+- `src/pages/CreateTrip.tsx` -- Autocomplete destination, multi-select vibe, back button, RLS fix, no group size cap
+- `src/pages/TripDashboard.tsx` -- 4-tab navigation, glass styling
+- `src/components/tabs/PlanTab.tsx` -- Add trip templates section
+- `src/components/tabs/HypeTab.tsx` -- Merge Fits + Pack content into sections
+- `src/components/Onboarding.tsx` -- Glass effect on CTA cards
+- `src/components/AppTour.tsx` -- Update slides for 4-tab structure, glass styling
+- `src/lib/sample-data.ts` -- Update vibeOptions (soft life emoji, multi-select support)
+- `src/index.css` -- Glass utility classes, enhanced gradients
+
+### Database migration:
+- Storage RLS policies for `outfits` bucket (INSERT/SELECT for authenticated users)
+
+### Removed from primary navigation (merged into HYPE):
+- `src/components/tabs/FitsTab.tsx` -- Content merged into HypeTab
+- `src/components/tabs/PackTab.tsx` -- Content merged into HypeTab
+- `src/components/tabs/PayTab.tsx` -- Replaced by FundTab
+
+(These files stay in the repo but are no longer imported by TripDashboard)
