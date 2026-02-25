@@ -1,41 +1,75 @@
 
 
-# Add Interactive App Tour / Onboarding Walkthrough
+# End-to-End Fix: Make Everything Work
 
-## What You'll Get
-When a new user signs up and lands on the home screen for the first time (no trips yet), they'll see a beautiful, swipeable walkthrough that explains each feature of the app before they create their first trip.
+## Issues Found
 
-## How It Works
+### 1. "Let's Go" button does nothing (Critical)
+The AppTour's `onComplete` callback calls `setShowTour(false)`, but `showTour` is already `false` when the tour auto-shows. The auto-show condition (`shouldShowTour`) stays true because the cached profile query still has `onboarding_completed: false`. The database update happens but the UI never refreshes.
 
-### Welcome Tour Component
-A full-screen, swipeable carousel that appears for first-time users (tracked via a flag in the `profiles` table). It walks through 7 slides:
+**Fix:** Add a local `dismissed` state in Onboarding and invalidate the profile query cache when the tour completes, so the overlay actually disappears.
 
-1. **Welcome** -- "Welcome to DEPARTE! Your ultimate girls' trip planner."
-2. **Plan** -- "Build your itinerary day by day and track your budget by category."
-3. **Pay** -- "Split costs, set installment plans, and nudge your girls to pay up."
-4. **Book** -- "Save flight, hotel, and activity links all in one place."
-5. **Pack** -- "Get a smart packing checklist based on your destination and vibe."
-6. **Fits** -- "Post your outfits, tag them by occasion, and react with emojis."
-7. **Hype** -- "Countdown messages and payment reminders keep the energy up."
+### 2. All dashboard tabs show hardcoded sample data
+PlanTab, PayTab, BookTab, PackTab, and FitsTab all import from `sample-data.ts` instead of fetching real trip data from the database. When you create a trip and land on its dashboard, every tab shows fake Italian trip data instead of your actual trip.
 
-Each slide has a cute icon/emoji, a short headline, and a one-liner description -- all styled in the pastel aesthetic.
+**Fix:** Pass the `tripId` prop to each tab component and have them fetch real data from the database. Show empty states with "add" actions when there's no data yet (which is the normal state for a freshly created trip).
 
-### Skip & Finish
-- A "Skip" button on every slide
-- A "Let's go!" button on the last slide
-- Both dismiss the tour and mark it as seen so it never shows again
+### 3. Join Trip flow is hardcoded
+The "Join" button navigates to `/trip/sample` instead of looking up the invite code in the database.
 
-### Replay Option
-- A small "How it works" link on the onboarding/home screen so users can replay the tour anytime
+**Fix:** Query the `trips` table by `invite_code`, add the user as a `trip_member`, then navigate to the real trip.
 
-## Technical Details
+## Changes
 
-### Database change
-- Add an `onboarding_completed` boolean column (default `false`) to the `profiles` table via migration
+### File: `src/components/Onboarding.tsx`
+- Add a `dismissed` state variable that starts as `false`
+- When AppTour completes, set `dismissed` to `true` AND invalidate the `profile-onboarding` query
+- Update the tour visibility condition to also check `!dismissed`
+- Fix Join Trip to query by `invite_code` from the `trips` table, insert into `trip_members`, and navigate to the matched trip
 
-### New files
-- **`src/components/AppTour.tsx`** -- The swipeable tour carousel component using framer-motion for slide transitions. Reads/writes the `onboarding_completed` flag from the `profiles` table.
+### File: `src/components/AppTour.tsx`
+- Accept an optional `onComplete` callback (already does) -- no changes needed here
 
-### Modified files
-- **`src/components/Onboarding.tsx`** -- Show the `AppTour` overlay when `onboarding_completed` is false. Add a "How it works" link below the Create/Join cards to replay it.
+### File: `src/pages/TripDashboard.tsx`
+- Pass `tripId` as a prop to all six tab components
 
+### File: `src/components/tabs/PlanTab.tsx`
+- Accept `tripId` prop
+- Fetch `itinerary_items` and `budget_categories` from the database for this trip
+- Show empty states with "Add" buttons when no data exists
+- Allow adding itinerary items and editing budget categories
+
+### File: `src/components/tabs/PayTab.tsx`
+- Accept `tripId` prop
+- Fetch `payments` and `trip_members` (with profiles) from the database
+- Show real payment status per member instead of sample data
+- Keep the organizer toggle and nudge functionality
+
+### File: `src/components/tabs/BookTab.tsx`
+- Accept `tripId` prop
+- Fetch `bookings` from the database for this trip
+- Show empty state with an "Add Booking" form
+- Allow adding new bookings (flights, hotels, activities)
+
+### File: `src/components/tabs/PackTab.tsx`
+- Accept `tripId` prop
+- Fetch `packing_items` from the database for the current user and trip
+- Persist checkbox state to the database
+- Allow adding new items that save to the database
+
+### File: `src/components/tabs/FitsTab.tsx`
+- Accept `tripId` prop
+- Fetch `outfit_posts` and `outfit_reactions` from the database
+- Show empty state until outfits are posted
+
+### File: `src/components/tabs/HypeTab.tsx`
+- Accept `tripId` prop
+- Calculate countdown based on real trip dates (already received from parent)
+- Fetch `notifications` from the database
+
+## Technical Notes
+
+- All tab queries use `useQuery` with `tripId` in the query key for proper caching
+- Empty states use friendly copy and "Add" CTAs so a freshly created trip feels useful, not broken
+- The `sample-data.ts` imports will be removed from all tab components
+- No database schema changes needed -- all tables already exist with proper RLS policies
