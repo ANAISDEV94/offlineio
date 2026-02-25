@@ -62,7 +62,7 @@ const Auth = () => {
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <img src={logo} alt="offline" className="h-32 mx-auto mb-2" />
+          <img src={logo} alt="offline" className="h-40 mx-auto mb-2" />
           <p className="text-muted-foreground mt-2">Log off. Lock in.</p>
         </div>
 
