@@ -71,7 +71,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const offset = circumference - (pctFunded / 100) * circumference;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-6 flex flex-col items-center">

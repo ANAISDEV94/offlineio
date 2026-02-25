@@ -67,10 +67,10 @@ const Auth = () => {
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             className="inline-block mb-4"
           >
-            <Plane className="h-10 w-10 text-primary mx-auto" />
+            <Plane className="h-8 w-8 text-primary mx-auto" strokeWidth={1.5} />
           </motion.div>
-          <h1 className="text-4xl font-display font-semibold text-foreground tracking-wide">
-            Offline
+          <h1 className="text-4xl font-display font-semibold text-foreground tracking-[0.15em]">
+            offline
           </h1>
           <p className="text-muted-foreground mt-2">Log off. Lock in.</p>
         </div>

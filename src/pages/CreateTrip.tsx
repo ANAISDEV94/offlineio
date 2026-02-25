@@ -210,7 +210,7 @@ const CreateTrip = () => {
           >
             {/* Step 0: Trip Type */}
             {step === 0 && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌟</span>
                   <h2 className="text-2xl font-display font-semibold mt-3">What kind of trip?</h2>
