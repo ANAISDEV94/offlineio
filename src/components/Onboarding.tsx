@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 import { Users, Plus, ArrowRight, Loader2, HelpCircle } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -109,7 +110,7 @@ const Onboarding = () => {
       </AnimatePresence>
       <div className="min-h-screen bg-background flex flex-col">
       <header className="p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-display font-semibold text-foreground tracking-[0.15em]">offline</h1>
+        <img src={logo} alt="offline" className="h-8" />
         <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           Sign out
         </button>
@@ -121,13 +122,6 @@ const Onboarding = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"
         >
-          <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="text-5xl mb-4"
-          >
-            ✈️
-          </motion.div>
           <h2 className="text-3xl font-display font-semibold text-foreground mb-2">
             Where to next?
           </h2>
