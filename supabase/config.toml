@@ -1,1 +1,7 @@
 project_id = "seruyblflufhgandrxsf"
+
+[functions.replan-chat]
+verify_jwt = false
+
+[functions.lookup-user-by-email]
+verify_jwt = false
