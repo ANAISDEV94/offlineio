@@ -4,17 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Sparkles, Loader2, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles, Loader2, Check, Globe, Lock, Upload, CalendarIcon } from "lucide-react";
 import { vibeOptions } from "@/lib/sample-data";
 import { destinations } from "@/lib/destinations";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
-const steps = ["Destination", "Dates", "Details", "Vibe", "Budget"];
+const steps = ["Trip Type", "Destination", "Dates", "Details", "Vibe", "Budget"];
 
 const CreateTrip = () => {
   const [step, setStep] = useState(0);
@@ -27,13 +32,35 @@ const CreateTrip = () => {
     vibes: [] as string[],
     perPersonBudget: 3000,
     paymentDeadline: "",
+    // Public trip fields
+    visibility: "private" as "private" | "public",
+    hostName: "",
+    hostBio: "",
+    tripDescription: "",
+    maxSpots: 20,
+    minSpotsRequired: 8,
+    joinDeadline: undefined as Date | undefined,
+    coverImage: null as File | null,
   });
   const [creating, setCreating] = useState(false);
   const [destOpen, setDestOpen] = useState(false);
   const [destSearch, setDestSearch] = useState("");
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("display_name").eq("user_id", user!.id).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Pre-fill host name from profile
+  const effectiveHostName = form.hostName || profile?.display_name || "";
 
   const update = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -54,6 +81,13 @@ const CreateTrip = () => {
     }));
   };
 
+  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    update("coverImage", file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
+
   const handleCreate = async () => {
     if (!user) return;
     setCreating(true);
@@ -61,7 +95,20 @@ const CreateTrip = () => {
       const tripName = form.name || `${form.destination} Trip`;
       const vibeStr = form.vibes.join(", ") || "luxury";
 
-      // Step 1: Insert trip WITHOUT .select() to avoid RLS read issue
+      let coverImageUrl: string | null = null;
+
+      // Upload cover image if public trip
+      if (form.visibility === "public" && form.coverImage) {
+        const ext = form.coverImage.name.split(".").pop();
+        const path = `${user.id}/${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("trip-covers")
+          .upload(path, form.coverImage);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from("trip-covers").getPublicUrl(path);
+        coverImageUrl = urlData.publicUrl;
+      }
+
       const { data: insertData, error: tripError } = await supabase
         .from("trips")
         .insert({
@@ -69,58 +116,36 @@ const CreateTrip = () => {
           destination: form.destination,
           start_date: form.startDate,
           end_date: form.endDate,
-          group_size: form.groupSize,
+          group_size: form.visibility === "public" ? form.maxSpots : form.groupSize,
           vibe: vibeStr,
           per_person_budget: form.perPersonBudget,
           payment_deadline: form.paymentDeadline || null,
           created_by: user.id,
-        })
+          visibility: form.visibility,
+          host_bio: form.visibility === "public" ? form.hostBio || null : null,
+          trip_description: form.visibility === "public" ? form.tripDescription || null : null,
+          max_spots: form.visibility === "public" ? form.maxSpots : null,
+          min_spots_required: form.visibility === "public" ? form.minSpotsRequired : null,
+          join_deadline: form.visibility === "public" && form.joinDeadline
+            ? format(form.joinDeadline, "yyyy-MM-dd")
+            : null,
+          cover_image_url: coverImageUrl,
+        } as any)
         .select("id")
         .single();
 
-      // If select fails due to RLS, try without select
-      if (tripError) {
-        // Fallback: insert without select, then query trip_members approach
-        const { error: insertOnly } = await supabase
-          .from("trips")
-          .insert({
-            name: tripName,
-            destination: form.destination,
-            start_date: form.startDate,
-            end_date: form.endDate,
-            group_size: form.groupSize,
-            vibe: vibeStr,
-            per_person_budget: form.perPersonBudget,
-            payment_deadline: form.paymentDeadline || null,
-            created_by: user.id,
-          });
-        if (insertOnly) throw insertOnly;
-
-        // Find the trip we just created
-        const { data: trips } = await supabase
-          .from("trips")
-          .select("id")
-          .eq("created_by", user.id)
-          .eq("name", tripName)
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        // This won't work either because of RLS. Let's use a different approach.
-        // Actually the real fix is: we need to add the member FIRST or change the SELECT policy.
-        // Since we can't change RLS here, let's work around by inserting member right after.
-        throw new Error("Could not create trip. Please try again.");
-      }
+      if (tripError) throw tripError;
 
       const tripId = insertData.id;
 
-      // Step 2: Add creator as organizer
+      // Add creator as organizer
       await supabase.from("trip_members").insert({
         trip_id: tripId,
         user_id: user.id,
         role: "organizer",
       });
 
-      // Step 3: Insert default budget categories
+      // Default budget categories
       const defaultCategories = ["Hotel", "Flights", "Activities", "Food", "Buffer"];
       await supabase.from("budget_categories").insert(
         defaultCategories.map((name) => ({
@@ -130,9 +155,16 @@ const CreateTrip = () => {
         }))
       );
 
+      // Mark as creator if public trip
+      if (form.visibility === "public") {
+        await supabase.from("profiles").update({ is_creator: true } as any).eq("user_id", user.id);
+      }
+
       toast({
         title: "Trip created! 🎉",
-        description: `${tripName} is ready. Time to invite the squad!`,
+        description: form.visibility === "public"
+          ? `${tripName} is live! Share the link to invite people.`
+          : `${tripName} is ready. Time to invite the squad!`,
       });
       navigate(`/trip/${tripId}`);
     } catch (err: any) {
@@ -144,11 +176,12 @@ const CreateTrip = () => {
 
   const canNext = () => {
     switch (step) {
-      case 0: return form.destination.trim().length > 0;
-      case 1: return form.startDate && form.endDate;
-      case 2: return form.groupSize > 1;
-      case 3: return form.vibes.length > 0;
-      case 4: return form.perPersonBudget > 0;
+      case 0: return true; // Trip type always valid
+      case 1: return form.destination.trim().length > 0;
+      case 2: return form.startDate && form.endDate;
+      case 3: return form.visibility === "public" ? form.maxSpots >= 2 : form.groupSize > 1;
+      case 4: return form.vibes.length > 0;
+      case 5: return form.perPersonBudget > 0;
       default: return true;
     }
   };
@@ -181,7 +214,151 @@ const CreateTrip = () => {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
+            {/* Step 0: Trip Type */}
             {step === 0 && (
+              <div className="space-y-6">
+                <div className="text-center mb-6">
+                  <span className="text-4xl">🌟</span>
+                  <h2 className="text-2xl font-display font-bold mt-3">What kind of trip?</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Choose how you want to organize</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Card
+                    className={`cursor-pointer border-2 transition-all ${
+                      form.visibility === "private"
+                        ? "border-primary shadow-lg shadow-primary/20"
+                        : "border-transparent hover:border-muted"
+                    }`}
+                    onClick={() => update("visibility", "private")}
+                  >
+                    <CardContent className="p-5 text-center">
+                      <Lock className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="font-semibold text-sm">Private</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Invite-only squad trip</p>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    className={`cursor-pointer border-2 transition-all ${
+                      form.visibility === "public"
+                        ? "border-primary shadow-lg shadow-primary/20"
+                        : "border-transparent hover:border-muted"
+                    }`}
+                    onClick={() => update("visibility", "public")}
+                  >
+                    <CardContent className="p-5 text-center">
+                      <Globe className="h-6 w-6 mx-auto mb-2 text-primary" />
+                      <p className="font-semibold text-sm">Creator-Hosted</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Share via link, anyone joins</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Progressive reveal for public */}
+                <AnimatePresence>
+                  {form.visibility === "public" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-4 overflow-hidden"
+                    >
+                      <div className="space-y-2">
+                        <Label>Host Name</Label>
+                        <Input
+                          placeholder={effectiveHostName || "Your name"}
+                          value={form.hostName}
+                          onChange={e => update("hostName", e.target.value)}
+                          className="rounded-xl"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Pre-filled from your profile</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Host Bio <span className="text-muted-foreground">({form.hostBio.length}/160)</span></Label>
+                        <Textarea
+                          placeholder="Travel enthusiast, group trip organizer..."
+                          value={form.hostBio}
+                          onChange={e => update("hostBio", e.target.value.slice(0, 160))}
+                          className="rounded-xl resize-none"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Trip Description</Label>
+                        <Textarea
+                          placeholder="Describe the experience you're creating..."
+                          value={form.tripDescription}
+                          onChange={e => update("tripDescription", e.target.value)}
+                          className="rounded-xl resize-none"
+                          rows={3}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Max Spots</Label>
+                          <Input
+                            type="number"
+                            min={2}
+                            value={form.maxSpots}
+                            onChange={e => update("maxSpots", Number(e.target.value))}
+                            className="rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Min Required</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={form.maxSpots}
+                            value={form.minSpotsRequired}
+                            onChange={e => update("minSpotsRequired", Math.min(Number(e.target.value), form.maxSpots))}
+                            className="rounded-xl"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Join Deadline</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full rounded-xl justify-start text-left font-normal", !form.joinDeadline && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {form.joinDeadline ? format(form.joinDeadline, "PPP") : "Pick a deadline"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={form.joinDeadline}
+                              onSelect={(d) => update("joinDeadline", d)}
+                              disabled={(date) => date < new Date()}
+                              initialFocus
+                              className={cn("p-3 pointer-events-auto")}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cover Image</Label>
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted rounded-xl cursor-pointer hover:border-primary/50 transition-colors overflow-hidden">
+                          {coverPreview ? (
+                            <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                          ) : (
+                            <>
+                              <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                              <span className="text-xs text-muted-foreground">Upload cover photo</span>
+                            </>
+                          )}
+                          <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+                        </label>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Step 1: Destination */}
+            {step === 1 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌍</span>
@@ -238,7 +415,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {step === 1 && (
+            {/* Step 2: Dates */}
+            {step === 2 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">📅</span>
@@ -257,24 +435,39 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {step === 2 && (
+            {/* Step 3: Details */}
+            {step === 3 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">👯‍♀️</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">How many girlies?</h2>
+                  <h2 className="text-2xl font-display font-bold mt-3">
+                    {form.visibility === "public" ? "Trip details" : "How many girlies?"}
+                  </h2>
                 </div>
-                <div className="space-y-2">
-                  <Label>Group Size</Label>
-                  <div className="flex items-center gap-4">
-                    <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", Math.max(2, form.groupSize - 1))}>−</Button>
-                    <span className="text-3xl font-bold text-foreground w-12 text-center">{form.groupSize}</span>
-                    <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", form.groupSize + 1)}>+</Button>
+                {form.visibility === "private" && (
+                  <div className="space-y-2">
+                    <Label>Group Size</Label>
+                    <div className="flex items-center gap-4">
+                      <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", Math.max(2, form.groupSize - 1))}>−</Button>
+                      <span className="text-3xl font-bold text-foreground w-12 text-center">{form.groupSize}</span>
+                      <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", form.groupSize + 1)}>+</Button>
+                    </div>
                   </div>
-                </div>
+                )}
+                {form.visibility === "public" && (
+                  <Card className="border-0 shadow-sm bg-muted/50">
+                    <CardContent className="p-4 space-y-1">
+                      <p className="text-sm font-semibold">Creator-Hosted Trip</p>
+                      <p className="text-xs text-muted-foreground">Max spots: {form.maxSpots} · Min required: {form.minSpotsRequired}</p>
+                      <p className="text-xs text-muted-foreground">These were set in the first step. You can go back to edit.</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
 
-            {step === 3 && (
+            {/* Step 4: Vibe */}
+            {step === 4 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">✨</span>
@@ -310,7 +503,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {step === 4 && (
+            {/* Step 5: Budget */}
+            {step === 5 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">💰</span>
@@ -333,8 +527,12 @@ const CreateTrip = () => {
                   <Card className="bg-muted border-0">
                     <CardContent className="p-4 text-center">
                       <p className="text-sm text-muted-foreground">Total trip budget</p>
-                      <p className="text-2xl font-bold text-foreground">${(form.perPersonBudget * form.groupSize).toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{form.groupSize} people × ${form.perPersonBudget.toLocaleString()}</p>
+                      <p className="text-2xl font-bold text-foreground">
+                        ${(form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {form.visibility === "public" ? form.maxSpots : form.groupSize} people × ${form.perPersonBudget.toLocaleString()}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>

@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2, Shield, Users } from "lucide-react";
 
 interface FundTabProps {
   tripId: string;
@@ -21,7 +21,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
     queryFn: async () => {
       const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
   });
 
@@ -50,8 +50,13 @@ const FundTab = ({ tripId }: FundTabProps) => {
     return pct >= 0.5 || p.status === "paid";
   }).length;
   const memberPct = payments.length > 0 ? (membersOnTrack / payments.length) * 100 : 100;
-  const healthScore = Math.round((pctFunded * 0.5) + (memberPct * 0.3) + 20); // 20 baseline for days factor
+  const healthScore = Math.round((pctFunded * 0.5) + (memberPct * 0.3) + 20);
   const healthLabel = healthScore >= 80 ? "On Track" : healthScore >= 50 ? "Needs Attention" : "Behind";
+
+  // Public trip: spots progress
+  const isPublic = trip?.visibility === "public";
+  const minSpotsRequired = trip?.min_spots_required;
+  const fullyFundedMembers = payments.filter(p => Number(p.amount) > 0 && Number(p.amount_paid) >= Number(p.amount)).length;
 
   // Deadline countdown
   const deadlineDays = trip?.payment_deadline
@@ -102,6 +107,24 @@ const FundTab = ({ tripId }: FundTabProps) => {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Public Trip: Spots Progress */}
+      {isPublic && minSpotsRequired && (
+        <Card className="border-0 shadow-sm glass-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">{fullyFundedMembers} / {minSpotsRequired} minimum spots funded</p>
+                <p className="text-[10px] text-muted-foreground">Trip activates when minimum is reached</p>
+              </div>
+            </div>
+            <Badge variant={fullyFundedMembers >= minSpotsRequired ? "default" : "secondary"} className="text-[10px]">
+              {fullyFundedMembers >= minSpotsRequired ? "✨ Activated" : `${minSpotsRequired - fullyFundedMembers} more needed`}
+            </Badge>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Trip Health */}
       <Card className="border-0 shadow-sm glass-card">

@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
-import { Lock, Unlock, ExternalLink, Plane, Hotel, MapPin, Plus, Loader2, Sparkles } from "lucide-react";
+import { Lock, Unlock, ExternalLink, Plane, Hotel, MapPin, Plus, Loader2, Sparkles, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface UnlockTabProps {
@@ -29,6 +29,15 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
   const [showAdd, setShowAdd] = useState(false);
   const [newBooking, setNewBooking] = useState({ title: "", category: "flight", url: "", notes: "", price: "" });
 
+  const { data: trip } = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
   const { data: payments = [] } = useQuery({
     queryKey: ["payments", tripId],
     queryFn: async () => {
@@ -41,7 +50,30 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
   const totalGoal = payments.reduce((s, m) => s + Number(m.amount), 0);
   const totalFunded = payments.reduce((s, m) => s + Number(m.amount_paid), 0);
   const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
-  const isUnlocked = pctFunded >= 100 || payments.length === 0;
+
+  // Public trip: check min spots activation
+  const isPublic = trip?.visibility === "public";
+  const minSpotsRequired = trip?.min_spots_required;
+  const fullyFundedMembers = payments.filter(p => Number(p.amount) > 0 && Number(p.amount_paid) >= Number(p.amount)).length;
+
+  // Check if funding deadline has passed
+  const joinDeadline = trip?.join_deadline ? new Date(trip.join_deadline) : null;
+  const deadlinePassed = joinDeadline ? joinDeadline.getTime() < Date.now() : false;
+
+  // Determine unlock status
+  let isUnlocked: boolean;
+  let notActivated = false;
+
+  if (isPublic && minSpotsRequired) {
+    if (deadlinePassed && fullyFundedMembers < minSpotsRequired) {
+      isUnlocked = false;
+      notActivated = true;
+    } else {
+      isUnlocked = fullyFundedMembers >= minSpotsRequired;
+    }
+  } else {
+    isUnlocked = pctFunded >= 100 || payments.length === 0;
+  }
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ["bookings", tripId],
@@ -79,6 +111,31 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
+  // Trip Not Activated state
+  if (notActivated) {
+    return (
+      <div className="space-y-6">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+          <Card className="border-0 shadow-lg glass-card">
+            <CardContent className="p-8 text-center space-y-4">
+              <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+              </motion.div>
+              <h3 className="text-xl font-display font-bold">Trip Not Activated</h3>
+              <p className="text-sm text-muted-foreground">
+                The funding deadline passed before the minimum {minSpotsRequired} spots were funded.
+                Funds will be returned to all participants.
+              </p>
+              <Badge variant="secondary" className="text-xs">
+                {fullyFundedMembers} / {minSpotsRequired} spots funded
+              </Badge>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
   if (!isUnlocked) {
     return (
       <div className="space-y-6">
@@ -90,10 +147,19 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
               </motion.div>
               <h3 className="text-xl font-display font-bold">Booking Locked 🔒</h3>
               <p className="text-sm text-muted-foreground">
-                Booking unlocks when your trip is fully funded.
+                {isPublic && minSpotsRequired
+                  ? `Booking unlocks when ${minSpotsRequired} spots are fully funded.`
+                  : "Booking unlocks when your trip is fully funded."}
               </p>
-              <Progress value={pctFunded} className="h-3" />
-              <p className="text-sm font-semibold">{pctFunded}% funded</p>
+              <Progress value={isPublic && minSpotsRequired
+                ? (fullyFundedMembers / minSpotsRequired) * 100
+                : pctFunded
+              } className="h-3" />
+              <p className="text-sm font-semibold">
+                {isPublic && minSpotsRequired
+                  ? `${fullyFundedMembers} / ${minSpotsRequired} spots funded`
+                  : `${pctFunded}% funded`}
+              </p>
             </CardContent>
           </Card>
         </motion.div>
@@ -115,7 +181,9 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
             <h3 className="text-lg font-display font-bold flex items-center justify-center gap-2">
               <Unlock className="h-5 w-5" /> Booking Unlocked! 🎉
             </h3>
-            <p className="text-xs text-muted-foreground mt-1">Trip is fully funded. Start booking!</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isPublic ? "Minimum spots funded. Start booking!" : "Trip is fully funded. Start booking!"}
+            </p>
           </CardContent>
         </Card>
       </motion.div>
