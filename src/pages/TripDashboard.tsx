@@ -122,12 +122,12 @@ const TripDashboard = () => {
         </TabsList>
 
         <div className="mt-4 px-2">
-          <TabsContent value="plan"><PlanTab /></TabsContent>
-          <TabsContent value="pay"><PayTab /></TabsContent>
-          <TabsContent value="book"><BookTab /></TabsContent>
-          <TabsContent value="pack"><PackTab /></TabsContent>
-          <TabsContent value="fits"><FitsTab /></TabsContent>
-          <TabsContent value="hype"><HypeTab /></TabsContent>
+          <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="pay"><PayTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="book"><BookTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="pack"><PackTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="fits"><FitsTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>
     </div>
