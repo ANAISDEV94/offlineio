@@ -339,6 +339,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_creator: boolean
           onboarding_completed: boolean
           updated_at: string
           user_id: string
@@ -348,6 +349,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_creator?: boolean
           onboarding_completed?: boolean
           updated_at?: string
           user_id: string
@@ -357,6 +359,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_creator?: boolean
           onboarding_completed?: boolean
           updated_at?: string
           user_id?: string
@@ -397,49 +400,73 @@ export type Database = {
       }
       trips: {
         Row: {
+          cover_image_url: string | null
           created_at: string
           created_by: string
           destination: string
           end_date: string
           group_size: number
+          host_bio: string | null
           id: string
           invite_code: string | null
+          is_verified_host: boolean
+          join_deadline: string | null
+          max_spots: number | null
+          min_spots_required: number | null
           name: string
           payment_deadline: string | null
           per_person_budget: number
           start_date: string
+          trip_description: string | null
           updated_at: string
           vibe: string
+          visibility: string
         }
         Insert: {
+          cover_image_url?: string | null
           created_at?: string
           created_by: string
           destination: string
           end_date: string
           group_size?: number
+          host_bio?: string | null
           id?: string
           invite_code?: string | null
+          is_verified_host?: boolean
+          join_deadline?: string | null
+          max_spots?: number | null
+          min_spots_required?: number | null
           name: string
           payment_deadline?: string | null
           per_person_budget?: number
           start_date: string
+          trip_description?: string | null
           updated_at?: string
           vibe?: string
+          visibility?: string
         }
         Update: {
+          cover_image_url?: string | null
           created_at?: string
           created_by?: string
           destination?: string
           end_date?: string
           group_size?: number
+          host_bio?: string | null
           id?: string
           invite_code?: string | null
+          is_verified_host?: boolean
+          join_deadline?: string | null
+          max_spots?: number | null
+          min_spots_required?: number | null
           name?: string
           payment_deadline?: string | null
           per_person_budget?: number
           start_date?: string
+          trip_description?: string | null
           updated_at?: string
           vibe?: string
+          visibility?: string
         }
         Relationships: []
       }

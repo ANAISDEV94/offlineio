@@ -3,10 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
-import { Plus, Loader2, Sparkles } from "lucide-react";
+import { Plus, Loader2, Sparkles, ChevronDown, Crown, UserMinus, Send, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PlanTabProps {
@@ -22,12 +25,28 @@ const tripTemplates = [
 ];
 
 const PlanTab = ({ tripId }: PlanTabProps) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newActivity, setNewActivity] = useState("");
   const [newDay, setNewDay] = useState(1);
   const [newTime, setNewTime] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [hostControlsOpen, setHostControlsOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
+
+  const { data: trip } = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  const isHost = user?.id === trip?.created_by;
+  const isPublicTrip = trip?.visibility === "public";
 
   const { data: budgetCategories = [], isLoading: budgetLoading } = useQuery({
     queryKey: ["budget-categories", tripId],
@@ -44,6 +63,67 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       const { data, error } = await supabase.from("itinerary_items").select("*").eq("trip_id", tripId).order("day_number").order("time");
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Host controls: members with payments
+  const { data: memberPayments = [] } = useQuery({
+    queryKey: ["host-member-payments", tripId],
+    queryFn: async () => {
+      const { data: members } = await supabase.from("trip_members").select("*").eq("trip_id", tripId);
+      if (!members) return [];
+      const userIds = members.map(m => m.user_id);
+      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
+      const { data: payments } = await supabase.from("payments").select("*").eq("trip_id", tripId);
+      return members.map(m => ({
+        ...m,
+        displayName: profiles?.find(p => p.user_id === m.user_id)?.display_name || "Unknown",
+        payment: payments?.find(p => p.user_id === m.user_id),
+      }));
+    },
+    enabled: isHost && isPublicTrip,
+  });
+
+  const removeMember = useMutation({
+    mutationFn: async (userId: string) => {
+      await supabase.from("trip_members").delete().eq("trip_id", tripId).eq("user_id", userId);
+      await supabase.from("payments").delete().match({ trip_id: tripId, user_id: userId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["host-member-payments", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
+      toast({ title: "Member removed" });
+    },
+  });
+
+  const sendAnnouncement = useMutation({
+    mutationFn: async () => {
+      if (!announcement.trim()) return;
+      const { data: members } = await supabase.from("trip_members").select("user_id").eq("trip_id", tripId);
+      if (!members) return;
+      await supabase.from("notifications").insert(
+        members.map(m => ({
+          trip_id: tripId,
+          user_id: m.user_id,
+          message: announcement.trim(),
+          type: "announcement",
+        }))
+      );
+    },
+    onSuccess: () => {
+      setAnnouncement("");
+      toast({ title: "Announcement sent! 📢" });
+    },
+  });
+
+  const updateDeadline = useMutation({
+    mutationFn: async () => {
+      if (!newDeadline) return;
+      await supabase.from("trips").update({ payment_deadline: newDeadline } as any).eq("id", tripId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      toast({ title: "Deadline updated" });
     },
   });
 
@@ -76,8 +156,116 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
+  // Health score (reused from FundTab logic)
+  const totalGoal = memberPayments.reduce((s, m) => s + Number(m.payment?.amount || 0), 0);
+  const totalFunded = memberPayments.reduce((s, m) => s + Number(m.payment?.amount_paid || 0), 0);
+  const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
+
   return (
     <div className="space-y-6">
+      {/* Host Controls - only for public trip host */}
+      {isHost && isPublicTrip && (
+        <Collapsible open={hostControlsOpen} onOpenChange={setHostControlsOpen}>
+          <CollapsibleTrigger asChild>
+            <Card className="border-0 shadow-md cursor-pointer bg-gradient-to-r from-primary/5 to-lavender/10">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Host Controls</span>
+                  <Badge variant="secondary" className="text-[10px]">{memberPayments.length} members</Badge>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${hostControlsOpen ? "rotate-180" : ""}`} />
+              </CardContent>
+            </Card>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-3 mt-3">
+              {/* Health Score */}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Trip Health</p>
+                    <p className="text-xs text-muted-foreground">{pctFunded}% funded</p>
+                  </div>
+                  <Badge variant={pctFunded >= 80 ? "default" : "secondary"} className="text-xs">
+                    {pctFunded >= 80 ? "✨ On Track" : "⚠️ Needs Attention"}
+                  </Badge>
+                </CardContent>
+              </Card>
+
+              {/* Participant Funding */}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Participant Funding</p>
+                  {memberPayments.map(m => {
+                    const pct = m.payment && Number(m.payment.amount) > 0
+                      ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100)
+                      : 0;
+                    return (
+                      <div key={m.id} className="flex items-center justify-between py-1.5">
+                        <div>
+                          <p className="text-sm font-medium">{m.displayName}</p>
+                          <p className="text-[10px] text-muted-foreground">{pct}% funded</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Progress value={pct} className="h-1.5 w-16" />
+                          {m.user_id !== user?.id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => removeMember.mutate(m.user_id)}
+                            >
+                              <UserMinus className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* Adjust Deadline */}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Adjust Deadline</p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={newDeadline}
+                      onChange={e => setNewDeadline(e.target.value)}
+                      className="rounded-xl flex-1"
+                    />
+                    <Button size="sm" className="rounded-xl" onClick={() => updateDeadline.mutate()} disabled={!newDeadline}>
+                      <Calendar className="h-3.5 w-3.5 mr-1" /> Update
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Send Announcement */}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Send Announcement</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Message to all members..."
+                      value={announcement}
+                      onChange={e => setAnnouncement(e.target.value)}
+                      className="rounded-xl flex-1"
+                    />
+                    <Button size="sm" className="rounded-xl" onClick={() => sendAnnouncement.mutate()} disabled={!announcement.trim()}>
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
       {/* Trip Templates */}
       <div>
         <h3 className="font-display font-bold text-base mb-3 flex items-center gap-2">
