@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Plane, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plane, Sparkles, Loader2 } from "lucide-react";
 import { vibeOptions } from "@/lib/sample-data";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const steps = ["Destination", "Dates", "Details", "Vibe", "Budget"];
 
@@ -23,17 +25,63 @@ const CreateTrip = () => {
     perPersonBudget: 3000,
     paymentDeadline: "",
   });
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const update = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const handleCreate = () => {
-    toast({
-      title: "Trip created! 🎉",
-      description: `${form.name || form.destination + " Trip"} is ready. Time to invite the squad!`,
-    });
-    navigate("/trip/sample");
+  const handleCreate = async () => {
+    if (!user) return;
+    setCreating(true);
+    try {
+      const tripName = form.name || `${form.destination} Trip`;
+      const { data: trip, error: tripError } = await supabase
+        .from("trips")
+        .insert({
+          name: tripName,
+          destination: form.destination,
+          start_date: form.startDate,
+          end_date: form.endDate,
+          group_size: form.groupSize,
+          vibe: form.vibe,
+          per_person_budget: form.perPersonBudget,
+          payment_deadline: form.paymentDeadline || null,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (tripError) throw tripError;
+
+      // Add creator as organizer
+      await supabase.from("trip_members").insert({
+        trip_id: trip.id,
+        user_id: user.id,
+        role: "organizer",
+      });
+
+      // Insert default budget categories
+      const defaultCategories = ["Hotel", "Flights", "Activities", "Food", "Buffer"];
+      await supabase.from("budget_categories").insert(
+        defaultCategories.map((name) => ({
+          trip_id: trip.id,
+          name,
+          amount: 0,
+        }))
+      );
+
+      toast({
+        title: "Trip created! 🎉",
+        description: `${tripName} is ready. Time to invite the squad!`,
+      });
+      navigate(`/trip/${trip.id}`);
+    } catch (err: any) {
+      toast({ title: "Oops!", description: err.message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const canNext = () => {
@@ -217,10 +265,11 @@ const CreateTrip = () => {
           ) : (
             <Button
               onClick={handleCreate}
-              disabled={!canNext()}
+              disabled={!canNext() || creating}
               className="w-full rounded-xl h-12 text-base font-semibold"
             >
-              <Sparkles className="mr-2 h-4 w-4" /> Create Trip ✨
+              {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {creating ? "Creating..." : "Create Trip ✨"}
             </Button>
           )}
         </div>
