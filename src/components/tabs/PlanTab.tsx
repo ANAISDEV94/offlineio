@@ -160,7 +160,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
   const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {isHost && isPublicTrip && (
         <Collapsible open={hostControlsOpen} onOpenChange={setHostControlsOpen}>
           <CollapsibleTrigger asChild>

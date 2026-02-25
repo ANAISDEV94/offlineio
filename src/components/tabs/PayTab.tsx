@@ -69,7 +69,7 @@ const PayTab = ({ tripId }: PayTabProps) => {
         <Card className="border-0 shadow-md bg-gradient-to-br from-primary/5 to-lavender/20">
           <CardContent className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Total Collected</p>
-            <p className="text-3xl font-display font-bold text-foreground">${totalCollected.toLocaleString()}</p>
+            <p className="text-3xl font-display font-semibold text-foreground">${totalCollected.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">of ${totalOwed.toLocaleString()}</p>
             {totalOwed > 0 && <Progress value={(totalCollected / totalOwed) * 100} className="h-2 mt-3" />}
           </CardContent>
@@ -96,7 +96,7 @@ const PayTab = ({ tripId }: PayTabProps) => {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{m.displayName}</span>
+                      <span className="font-medium text-sm">{m.displayName}</span>
                       {pct >= 100 && <Badge className="text-[10px] px-1.5 py-0 bg-mint text-foreground">Paid ✓</Badge>}
                     </div>
                     <span className="text-sm font-medium">${Number(m.amount_paid).toLocaleString()} / ${Number(m.amount).toLocaleString()}</span>

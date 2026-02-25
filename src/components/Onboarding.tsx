@@ -109,7 +109,7 @@ const Onboarding = () => {
       </AnimatePresence>
       <div className="min-h-screen bg-background flex flex-col">
       <header className="p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-display font-semibold text-foreground tracking-wide">Offline</h1>
+        <h1 className="text-2xl font-display font-semibold text-foreground tracking-[0.15em]">offline</h1>
         <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           Sign out
         </button>
@@ -139,10 +139,10 @@ const Onboarding = () => {
         <div className="w-full max-w-sm space-y-4">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
             <Card
-              className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-all hover:-translate-y-1"
+              className="border-0 shadow-sm cursor-pointer hover:shadow-sm transition-all hover:-translate-y-1"
               onClick={() => navigate("/create-trip")}
             >
-              <CardContent className="flex items-center gap-4 p-5">
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
                   <Plus className="h-6 w-6 text-primary" />
                 </div>
@@ -157,10 +157,10 @@ const Onboarding = () => {
 
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
             <Card
-              className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-all hover:-translate-y-1"
+              className="border-0 shadow-sm cursor-pointer hover:shadow-sm transition-all hover:-translate-y-1"
               onClick={() => setShowJoin(!showJoin)}
             >
-              <CardContent className="flex items-center gap-4 p-5">
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="h-12 w-12 rounded-2xl bg-secondary flex items-center justify-center">
                   <Users className="h-6 w-6 text-secondary-foreground" />
                 </div>
@@ -206,7 +206,7 @@ const Onboarding = () => {
                 return (
                   <Card
                     key={trip.id}
-                    className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5"
+                    className="border-0 shadow-sm cursor-pointer hover:shadow-sm transition-all hover:-translate-y-0.5"
                     onClick={() => navigate(`/trip/${trip.id}`)}
                   >
                     <CardContent className="flex items-center gap-4 p-4">

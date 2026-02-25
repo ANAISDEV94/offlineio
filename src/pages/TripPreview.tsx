@@ -173,7 +173,7 @@ const TripPreview = () => {
         </motion.div>
 
         {/* Trip Details */}
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-6">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between items-center">

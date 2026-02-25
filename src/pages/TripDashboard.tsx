@@ -174,7 +174,7 @@ const TripDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="fund" className="px-2 -mt-2">
+      <Tabs defaultValue="fund" className="px-2 mt-2">
         <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
           <TabsTrigger value="fund" className="rounded-xl text-xs data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
           <TabsTrigger value="plan" className="rounded-xl text-xs data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>

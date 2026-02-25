@@ -166,10 +166,10 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
   const categories = ["flight", "hotel", "activity"] as const;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
         <Card className="border-0 shadow-sm bg-primary/5">
-          <CardContent className="p-5 text-center">
+          <CardContent className="p-6 text-center">
             <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 0.5 }}>
               <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
             </motion.div>
