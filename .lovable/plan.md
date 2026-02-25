@@ -1,78 +1,89 @@
 
 
-# New Overview Tab + Private "My Trip" Portal
+# Invite Code, Member Management, and Budget Replan AI
 
 ## What This Adds
 
-1. **Overview Tab** (new first tab) -- A single-glance dashboard showing trip details, all members, and everyone's funding status in one place.
-2. **My Trip Tab** (new tab) -- A private portal for the logged-in user showing only their own payment details, installment plan, packing list, and personal info.
+### 1. Invite Code in Overview Tab
+Display the trip's invite code prominently in the Overview tab so everyone can see and share it. Includes a copy button for easy sharing.
 
-The existing tabs (Fund, Plan, Unlock, Hype) remain unchanged. The tab bar becomes: **Overview | Fund | Plan | Unlock | Hype | My Trip**
+### 2. Organizer Member Management (Overview Tab)
+The organizer gets controls right in the Overview tab to:
+- Add members by email (looks up their profile, adds them to `trip_members`, creates a payment record)
+- Remove members
+- See the full headcount (X of Y spots filled)
+- Assign roles (mark someone as co-organizer)
 
----
-
-## 1. New File: `src/components/tabs/OverviewTab.tsx`
-
-This is the holistic "at a glance" view. It will show:
-
-- **Trip Details Card**: Destination, dates, vibe, per-person budget, days until departure
-- **Members List**: Every person on the trip with their avatar initials, name, role (organizer vs member), and a funding status badge (Paid / On Track / Behind) -- dollar amounts are NOT shown here to keep it neutral and non-invasive
-- **Group Funding Summary**: A single progress bar showing total group funding percentage (e.g. "72% funded -- 5 of 7 members on track")
-- **Quick Stats Row**: Total members count, days until trip, funding health score
-- **Payment Deadline** (if set): Countdown card
-
-Data sources (all already accessible via existing RLS):
-- `trips` table for trip details
-- `trip_members` + `profiles` for member list
-- `payments` for funding summary (aggregated, no individual dollar amounts exposed)
-
-## 2. New File: `src/components/tabs/MyTripTab.tsx`
-
-This is the user's private portal. It queries only the current user's data:
-
-- **My Payment Card**: Their personal amount paid, amount owed, remaining balance, percentage, installment plan, next due date, auto-pay status
-- **My Packing List**: Their personal packing items (already scoped to `user_id` via RLS)
-- **My Role**: Whether they're an organizer or member
-- **Empty states** if no payment or packing items are set up yet
-
-Data sources:
-- `payments` filtered to `auth.uid()` (RLS already enforces this for updates; for select, all trip members can see all payments, but we filter client-side to show only the user's own)
-- `packing_items` (RLS already scoped to own user)
-
-## 3. Updated File: `src/pages/TripDashboard.tsx`
-
-- Import `OverviewTab` and `MyTripTab`
-- Change `defaultValue` from `"fund"` to `"overview"`
-- Add two new tab triggers and content areas
-- Tab bar order: Overview, Fund, Plan, Unlock, Hype, My Trip
-- Since 6 tabs is a lot for mobile, reduce tab label text size slightly and use compact emoji+text labels
-
----
-
-## No Database Changes
-
-All the data needed already exists in the current schema. The existing RLS policies already allow trip members to view payments, members, and trip details. The private portal just filters client-side to the current user's records.
+### 3. Budget Replan Feature (Overview Tab)
+When the trip is underfunded (e.g. $10k collected out of $12k needed, 60 days out), a "Budget Alert" card appears in the Overview tab showing:
+- The funding shortfall amount
+- A "Replan on This Budget" button that opens an AI chatbot dialog
+- The AI chatbot (powered by Lovable AI / Gemini) helps re-plan the trip based on the actual collected amount -- suggesting cheaper hotels, alternative activities, flight changes, etc.
+- The chat is a simple dialog/sheet overlay, not a separate tab
 
 ## Technical Details
 
-### OverviewTab Data Queries
-- `trips` (already cached from parent)
-- `trip_members` + `profiles` join (already cached from parent)  
-- `payments` aggregate (reuses existing query pattern)
+### Overview Tab Changes (`src/components/tabs/OverviewTab.tsx`)
 
-### MyTripTab Data Queries
-- `payments` filtered by `user_id = auth.uid()` (single row)
-- `packing_items` filtered by `user_id = auth.uid()` (already RLS-scoped)
+**Invite Code Section** (new card after Trip Details):
+- Shows `trip.invite_code` with a copy-to-clipboard button
+- Available to all trip members
 
-### Tab Bar Layout
-With 6 tabs on mobile, each trigger will use `text-[10px]` and shorter labels:
-- Overview, Fund, Plan, Unlock, Hype, Me
+**Member Management** (enhanced Members card, organizer-only controls):
+- "Add Member" button that expands an email input
+- Lookup user by email from `profiles` table (need to query by a match -- but profiles don't have email; emails are in `auth.users` which we can't query client-side)
+- Alternative approach: Add member by invite code sharing (already works via Onboarding) OR add an edge function that looks up a user by email
+- For removing members: small X button next to each member (organizer only)
+- Role badge toggle: tap to switch between "member" and "organizer" (organizer only)
+
+**Budget Alert Card** (conditional, shows when underfunded):
+- Calculates shortfall = total owed - total paid
+- Shows when funding < 100% and trip is within 90 days
+- "Replan with ${totalPaid}" button opens AI chat dialog
+
+### New Edge Function: `replan-chat`
+- Accepts conversation history + trip context (destination, dates, current budget, original budget, member count)
+- Calls Gemini 2.5 Flash via Lovable AI
+- System prompt: "You are a travel budget advisor. The group originally planned a ${original} trip to {destination} but only has ${actual} collected. Help them replan to fit the new budget with specific, actionable suggestions."
+- Returns AI response
+
+### New Edge Function: `lookup-user-by-email`
+- Accepts email string
+- Uses service role key to query `auth.users` for the email
+- Returns `user_id` and display name from profiles
+- Only callable by authenticated users who are organizers of a trip
+
+### New Component: `src/components/ReplanChat.tsx`
+- Dialog/Sheet overlay with a simple chat interface
+- Sends messages to `replan-chat` edge function
+- Renders AI responses with markdown
+- Pre-populates with trip context so the AI knows the situation immediately
+
+### Database Changes
+
+**Add `trip_members` UPDATE policy** (currently missing):
+```sql
+CREATE POLICY "Organizers can update members"
+ON public.trip_members FOR UPDATE
+USING (is_trip_organizer(auth.uid(), trip_id));
+```
+
+This allows organizers to change a member's role.
 
 ### Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/tabs/OverviewTab.tsx` | New file -- holistic trip dashboard |
-| `src/components/tabs/MyTripTab.tsx` | New file -- private user portal |
-| `src/pages/TripDashboard.tsx` | Add two new tabs, change default to "overview" |
+| `src/components/tabs/OverviewTab.tsx` | Add invite code card, organizer member controls, budget alert card with replan button |
+| `src/components/ReplanChat.tsx` | New -- AI chat dialog for budget replanning |
+| `supabase/functions/replan-chat/index.ts` | New -- Edge function calling Gemini for replan suggestions |
+| `supabase/functions/lookup-user-by-email/index.ts` | New -- Edge function to find user by email for organizer to add members |
+| Database migration | Add UPDATE policy on `trip_members` for organizers |
+
+### User Flow
+
+1. **Sharing**: Any member opens Overview tab, sees invite code, taps "Copy" to share with friends
+2. **Adding members**: Organizer types an email in the "Add Member" input, the system finds the user and adds them
+3. **Budget shortfall**: When funding is behind, a prominent card appears: "You're $2,000 short. Want help replanning?" Tapping it opens a chat where AI suggests specific cuts and alternatives
+4. **AI chat example**: "Your group has $10,000 instead of $12,000 for Cancun. Here's how to make it work: Switch from the all-inclusive resort ($200/night) to a beachfront Airbnb ($120/night) -- saves $1,600 across 4 nights for 4 people..."
 
