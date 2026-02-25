@@ -32,7 +32,6 @@ const CreateTrip = () => {
     vibes: [] as string[],
     perPersonBudget: 3000,
     paymentDeadline: "",
-    // Public trip fields
     visibility: "private" as "private" | "public",
     hostName: "",
     hostBio: "",
@@ -59,7 +58,6 @@ const CreateTrip = () => {
     enabled: !!user,
   });
 
-  // Pre-fill host name from profile
   const effectiveHostName = form.hostName || profile?.display_name || "";
 
   const update = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
@@ -97,7 +95,6 @@ const CreateTrip = () => {
 
       let coverImageUrl: string | null = null;
 
-      // Upload cover image if public trip
       if (form.visibility === "public" && form.coverImage) {
         const ext = form.coverImage.name.split(".").pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
@@ -138,14 +135,12 @@ const CreateTrip = () => {
 
       const tripId = insertData.id;
 
-      // Add creator as organizer
       await supabase.from("trip_members").insert({
         trip_id: tripId,
         user_id: user.id,
         role: "organizer",
       });
 
-      // Default budget categories
       const defaultCategories = ["Hotel", "Flights", "Activities", "Food", "Buffer"];
       await supabase.from("budget_categories").insert(
         defaultCategories.map((name) => ({
@@ -155,20 +150,19 @@ const CreateTrip = () => {
         }))
       );
 
-      // Mark as creator if public trip
       if (form.visibility === "public") {
         await supabase.from("profiles").update({ is_creator: true } as any).eq("user_id", user.id);
       }
 
       toast({
-        title: "Trip created! 🎉",
+        title: "Trip created!",
         description: form.visibility === "public"
-          ? `${tripName} is live! Share the link to invite people.`
-          : `${tripName} is ready. Time to invite the squad!`,
+          ? `${tripName} is live. Share the link to invite people.`
+          : `${tripName} is ready. Time to invite the crew.`,
       });
       navigate(`/trip/${tripId}`);
     } catch (err: any) {
-      toast({ title: "Oops!", description: err.message, variant: "destructive" });
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setCreating(false);
     }
@@ -176,7 +170,7 @@ const CreateTrip = () => {
 
   const canNext = () => {
     switch (step) {
-      case 0: return true; // Trip type always valid
+      case 0: return true;
       case 1: return form.destination.trim().length > 0;
       case 2: return form.startDate && form.endDate;
       case 3: return form.visibility === "public" ? form.maxSpots >= 2 : form.groupSize > 1;
@@ -192,7 +186,7 @@ const CreateTrip = () => {
         <button onClick={() => step > 0 ? setStep(step - 1) : navigate("/")} className="text-foreground">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-lg font-display font-bold">Create Your Trip</h1>
+        <h1 className="text-lg font-display font-semibold">Create Your Trip</h1>
       </header>
 
       {/* Progress */}
@@ -219,7 +213,7 @@ const CreateTrip = () => {
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌟</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">What kind of trip?</h2>
+                  <h2 className="text-2xl font-display font-semibold mt-3">What kind of trip?</h2>
                   <p className="text-sm text-muted-foreground mt-1">Choose how you want to organize</p>
                 </div>
 
@@ -227,34 +221,33 @@ const CreateTrip = () => {
                   <Card
                     className={`cursor-pointer border-2 transition-all ${
                       form.visibility === "private"
-                        ? "border-primary shadow-lg shadow-primary/20"
+                        ? "border-primary shadow-sm"
                         : "border-transparent hover:border-muted"
                     }`}
                     onClick={() => update("visibility", "private")}
                   >
                     <CardContent className="p-5 text-center">
                       <Lock className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                      <p className="font-semibold text-sm">Private</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Invite-only squad trip</p>
+                      <p className="font-medium text-sm">Private</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Invite-only group trip</p>
                     </CardContent>
                   </Card>
                   <Card
                     className={`cursor-pointer border-2 transition-all ${
                       form.visibility === "public"
-                        ? "border-primary shadow-lg shadow-primary/20"
+                        ? "border-primary shadow-sm"
                         : "border-transparent hover:border-muted"
                     }`}
                     onClick={() => update("visibility", "public")}
                   >
                     <CardContent className="p-5 text-center">
                       <Globe className="h-6 w-6 mx-auto mb-2 text-primary" />
-                      <p className="font-semibold text-sm">Creator-Hosted</p>
+                      <p className="font-medium text-sm">Creator-Hosted</p>
                       <p className="text-[10px] text-muted-foreground mt-1">Share via link, anyone joins</p>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Progressive reveal for public */}
                 <AnimatePresence>
                   {form.visibility === "public" && (
                     <motion.div
@@ -362,13 +355,13 @@ const CreateTrip = () => {
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌍</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">Where are you going?</h2>
+                  <h2 className="text-2xl font-display font-semibold mt-3">Where are you going?</h2>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Trip Name</Label>
                     <Input
-                      placeholder="Italy Girlies Trip 2026"
+                      placeholder="Summer 2026 Trip"
                       value={form.name}
                       onChange={e => update("name", e.target.value)}
                       className="rounded-xl"
@@ -420,7 +413,7 @@ const CreateTrip = () => {
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">📅</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">When's the trip?</h2>
+                  <h2 className="text-2xl font-display font-semibold mt-3">When's the trip?</h2>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -439,9 +432,9 @@ const CreateTrip = () => {
             {step === 3 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
-                  <span className="text-4xl">👯‍♀️</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">
-                    {form.visibility === "public" ? "Trip details" : "How many girlies?"}
+                  <span className="text-4xl">👥</span>
+                  <h2 className="text-2xl font-display font-semibold mt-3">
+                    {form.visibility === "public" ? "Trip details" : "How many people?"}
                   </h2>
                 </div>
                 {form.visibility === "private" && (
@@ -449,7 +442,7 @@ const CreateTrip = () => {
                     <Label>Group Size</Label>
                     <div className="flex items-center gap-4">
                       <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", Math.max(2, form.groupSize - 1))}>−</Button>
-                      <span className="text-3xl font-bold text-foreground w-12 text-center">{form.groupSize}</span>
+                      <span className="text-3xl font-display font-semibold text-foreground w-12 text-center">{form.groupSize}</span>
                       <Button variant="outline" size="icon" className="rounded-xl" onClick={() => update("groupSize", form.groupSize + 1)}>+</Button>
                     </div>
                   </div>
@@ -457,7 +450,7 @@ const CreateTrip = () => {
                 {form.visibility === "public" && (
                   <Card className="border-0 shadow-sm bg-muted/50">
                     <CardContent className="p-4 space-y-1">
-                      <p className="text-sm font-semibold">Creator-Hosted Trip</p>
+                      <p className="text-sm font-medium">Creator-Hosted Trip</p>
                       <p className="text-xs text-muted-foreground">Max spots: {form.maxSpots} · Min required: {form.minSpotsRequired}</p>
                       <p className="text-xs text-muted-foreground">These were set in the first step. You can go back to edit.</p>
                     </CardContent>
@@ -471,7 +464,7 @@ const CreateTrip = () => {
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">✨</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">What's the vibe?</h2>
+                  <h2 className="text-2xl font-display font-semibold mt-3">What's the vibe?</h2>
                   <p className="text-sm text-muted-foreground mt-1">Pick as many as you want</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -482,7 +475,7 @@ const CreateTrip = () => {
                         key={v.value}
                         className={`cursor-pointer border-2 transition-all ${
                           isSelected
-                            ? "border-primary shadow-lg shadow-primary/20"
+                            ? "border-primary shadow-sm"
                             : "border-transparent hover:border-muted"
                         }`}
                         onClick={() => toggleVibe(v.value)}
@@ -508,7 +501,7 @@ const CreateTrip = () => {
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">💰</span>
-                  <h2 className="text-2xl font-display font-bold mt-3">Budget per person</h2>
+                  <h2 className="text-2xl font-display font-semibold mt-3">Budget per person</h2>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -517,7 +510,7 @@ const CreateTrip = () => {
                       type="number"
                       value={form.perPersonBudget}
                       onChange={e => update("perPersonBudget", Number(e.target.value))}
-                      className="rounded-xl text-center text-2xl font-bold h-14"
+                      className="rounded-xl text-center text-2xl font-display font-semibold h-14"
                     />
                   </div>
                   <div className="space-y-2">
@@ -527,7 +520,7 @@ const CreateTrip = () => {
                   <Card className="bg-muted border-0">
                     <CardContent className="p-4 text-center">
                       <p className="text-sm text-muted-foreground">Total trip budget</p>
-                      <p className="text-2xl font-bold text-foreground">
+                      <p className="text-2xl font-display font-semibold text-foreground">
                         ${(form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -551,7 +544,7 @@ const CreateTrip = () => {
             <Button
               onClick={() => setStep(step + 1)}
               disabled={!canNext()}
-              className="flex-1 rounded-xl h-12 text-base font-semibold"
+              className="flex-1 rounded-xl h-12 text-base font-medium"
             >
               Next <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -559,10 +552,10 @@ const CreateTrip = () => {
             <Button
               onClick={handleCreate}
               disabled={!canNext() || creating}
-              className="flex-1 rounded-xl h-12 text-base font-semibold"
+              className="flex-1 rounded-xl h-12 text-base font-medium"
             >
               {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {creating ? "Creating..." : "Create Trip ✨"}
+              {creating ? "Creating..." : "Create Trip"}
             </Button>
           )}
         </div>

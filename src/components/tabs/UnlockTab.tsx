@@ -51,16 +51,13 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
   const totalFunded = payments.reduce((s, m) => s + Number(m.amount_paid), 0);
   const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
 
-  // Public trip: check min spots activation
   const isPublic = trip?.visibility === "public";
   const minSpotsRequired = trip?.min_spots_required;
   const fullyFundedMembers = payments.filter(p => Number(p.amount) > 0 && Number(p.amount_paid) >= Number(p.amount)).length;
 
-  // Check if funding deadline has passed
   const joinDeadline = trip?.join_deadline ? new Date(trip.join_deadline) : null;
   const deadlinePassed = joinDeadline ? joinDeadline.getTime() < Date.now() : false;
 
-  // Determine unlock status
   let isUnlocked: boolean;
   let notActivated = false;
 
@@ -102,7 +99,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
       queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
       setNewBooking({ title: "", category: "flight", url: "", notes: "", price: "" });
       setShowAdd(false);
-      toast({ title: "Booking added! ✈️" });
+      toast({ title: "Booking added" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -111,17 +108,16 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  // Trip Not Activated state
   if (notActivated) {
     return (
       <div className="space-y-6">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-          <Card className="border-0 shadow-lg glass-card">
+          <Card className="border-0 shadow-sm glass-card">
             <CardContent className="p-8 text-center space-y-4">
               <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 2, repeat: Infinity }}>
                 <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
               </motion.div>
-              <h3 className="text-xl font-display font-bold">Trip Not Activated</h3>
+              <h3 className="text-xl font-display font-semibold">Trip Not Activated</h3>
               <p className="text-sm text-muted-foreground">
                 The funding deadline passed before the minimum {minSpotsRequired} spots were funded.
                 Funds will be returned to all participants.
@@ -140,12 +136,12 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
     return (
       <div className="space-y-6">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-          <Card className="border-0 shadow-lg glass-card">
+          <Card className="border-0 shadow-sm glass-card">
             <CardContent className="p-8 text-center space-y-4">
               <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 2, repeat: Infinity }}>
                 <Lock className="h-12 w-12 text-muted-foreground mx-auto" />
               </motion.div>
-              <h3 className="text-xl font-display font-bold">Booking Locked 🔒</h3>
+              <h3 className="text-xl font-display font-semibold">Booking Locked</h3>
               <p className="text-sm text-muted-foreground">
                 {isPublic && minSpotsRequired
                   ? `Booking unlocks when ${minSpotsRequired} spots are fully funded.`
@@ -155,7 +151,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
                 ? (fullyFundedMembers / minSpotsRequired) * 100
                 : pctFunded
               } className="h-3" />
-              <p className="text-sm font-semibold">
+              <p className="text-sm font-medium">
                 {isPublic && minSpotsRequired
                   ? `${fullyFundedMembers} / ${minSpotsRequired} spots funded`
                   : `${pctFunded}% funded`}
@@ -171,15 +167,14 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Unlocked celebration */}
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/10 via-lavender/30 to-mint/20">
+        <Card className="border-0 shadow-sm bg-primary/5">
           <CardContent className="p-5 text-center">
             <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 0.5 }}>
               <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
             </motion.div>
-            <h3 className="text-lg font-display font-bold flex items-center justify-center gap-2">
-              <Unlock className="h-5 w-5" /> Booking Unlocked! 🎉
+            <h3 className="text-lg font-display font-semibold flex items-center justify-center gap-2">
+              <Unlock className="h-5 w-5" /> Booking Unlocked
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
               {isPublic ? "Minimum spots funded. Start booking!" : "Trip is fully funded. Start booking!"}
@@ -219,7 +214,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
       {bookings.length === 0 && !showAdd ? (
         <div className="text-center py-8">
           <p className="text-3xl mb-2">✈️</p>
-          <p className="text-sm text-muted-foreground">No bookings yet. Add flights, hotels, and activities!</p>
+          <p className="text-sm text-muted-foreground">No bookings yet. Add flights, hotels, and activities.</p>
         </div>
       ) : (
         categories.map((cat) => {
@@ -227,7 +222,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
           if (items.length === 0) return null;
           return (
             <div key={cat}>
-              <h3 className="font-display font-bold text-base mb-3 flex items-center gap-2">
+              <h3 className="font-display font-medium text-base mb-3 flex items-center gap-2">
                 {categoryIcons[cat]} {cat === "flight" ? "Flights" : cat === "hotel" ? "Hotels" : "Experiences"}
               </h3>
               <div className="space-y-3">
@@ -236,7 +231,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
                     <Card className="border-0 shadow-sm">
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-1">
-                          <h4 className="font-semibold text-sm">{b.title}</h4>
+                          <h4 className="font-medium text-sm">{b.title}</h4>
                           {b.price && <Badge variant="secondary" className="text-xs">${b.price}</Badge>}
                         </div>
                         {b.notes && <p className="text-xs text-muted-foreground mb-3">{b.notes}</p>}

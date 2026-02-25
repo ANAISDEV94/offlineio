@@ -83,7 +83,7 @@ const TripDashboard = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-4xl">😢</p>
-        <p className="text-foreground font-semibold">Trip not found</p>
+        <p className="text-foreground font-medium">Trip not found</p>
         <button onClick={() => navigate("/")} className="text-primary text-sm">← Back home</button>
       </div>
     );
@@ -97,19 +97,19 @@ const TripDashboard = () => {
     (new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
 
-  const avatarColors = ["bg-primary/20", "bg-lavender", "bg-peach", "bg-mint", "bg-blush"];
+  const avatarColors = ["bg-primary/20", "bg-secondary", "bg-accent/20", "bg-muted"];
 
   const handleShare = () => {
     const url = `${window.location.origin}/trip/preview/${tripId}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link copied! 🔗", description: "Share it with your crew." });
+    toast({ title: "Link copied", description: "Share it with your crew." });
   };
 
   return (
     <div className="min-h-screen bg-background pb-4">
       {/* Header */}
       <div
-        className="relative bg-gradient-to-br from-primary/10 via-lavender/30 to-peach/20 px-4 pt-4 pb-6 overflow-hidden"
+        className="relative bg-primary/5 px-4 pt-4 pb-6 overflow-hidden"
       >
         {isPublic && trip.cover_image_url && (
           <>
@@ -123,7 +123,7 @@ const TripDashboard = () => {
               <button onClick={() => navigate("/")} className="text-foreground">
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <h1 className="text-lg font-display font-bold text-foreground">{trip.name}</h1>
+              <h1 className="text-lg font-display font-semibold text-foreground">{trip.name}</h1>
             </div>
             {isPublic && isHost && (
               <Button variant="outline" size="sm" onClick={handleShare} className="rounded-xl text-xs gap-1.5">
@@ -139,7 +139,7 @@ const TripDashboard = () => {
           >
             {isPublic && (
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Badge variant="secondary" className="text-[10px] font-semibold gap-1">
+                <Badge variant="secondary" className="text-[10px] font-medium gap-1">
                   <Sparkles className="h-3 w-3" /> Creator Hosted
                 </Badge>
               </div>
@@ -148,13 +148,13 @@ const TripDashboard = () => {
             {isPublic && hostProfile && (
               <p className="text-xs text-muted-foreground">Hosted by {hostProfile.display_name}</p>
             )}
-            <p className="text-4xl font-display font-bold text-foreground mt-1">{daysUntil} days</p>
-            <p className="text-sm text-muted-foreground">until takeoff ✈️</p>
+            <p className="text-4xl font-display font-semibold text-foreground mt-1">{daysUntil} days</p>
+            <p className="text-sm text-muted-foreground">until takeoff</p>
 
             {isPublic && (
               <div className="flex items-center justify-center gap-1.5 mt-2">
                 <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   {members.length} / {maxSpots} Spots Claimed
                 </p>
               </div>
@@ -163,7 +163,7 @@ const TripDashboard = () => {
             <div className="flex justify-center mt-3 -space-x-2">
               {members.map((m, i) => (
                 <Avatar key={m.id} className={`h-9 w-9 border-2 border-background ${avatarColors[i % avatarColors.length]}`}>
-                  <AvatarFallback className="text-xs font-semibold bg-transparent text-foreground">
+                  <AvatarFallback className="text-xs font-medium bg-transparent text-foreground">
                     {(m.profile?.display_name || "??").slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -176,10 +176,10 @@ const TripDashboard = () => {
       {/* Tabs */}
       <Tabs defaultValue="fund" className="px-2 -mt-2">
         <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
-          <TabsTrigger value="fund" className="rounded-xl text-xs data-[state=active]:shadow-md">💰 Fund</TabsTrigger>
-          <TabsTrigger value="plan" className="rounded-xl text-xs data-[state=active]:shadow-md">📋 Plan</TabsTrigger>
-          <TabsTrigger value="unlock" className="rounded-xl text-xs data-[state=active]:shadow-md">🔓 Unlock</TabsTrigger>
-          <TabsTrigger value="hype" className="rounded-xl text-xs data-[state=active]:shadow-md">🎉 Hype</TabsTrigger>
+          <TabsTrigger value="fund" className="rounded-xl text-xs data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
+          <TabsTrigger value="plan" className="rounded-xl text-xs data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
+          <TabsTrigger value="unlock" className="rounded-xl text-xs data-[state=active]:shadow-sm">🔓 Unlock</TabsTrigger>
+          <TabsTrigger value="hype" className="rounded-xl text-xs data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
         </TabsList>
 
         <div className="mt-4 px-2">

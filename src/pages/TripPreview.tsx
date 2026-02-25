@@ -75,7 +75,6 @@ const TripPreview = () => {
     mutationFn: async () => {
       if (!user || !trip) throw new Error("Must be logged in");
 
-      // Insert as member
       const { error: memberErr } = await supabase.from("trip_members").insert({
         trip_id: trip.id,
         user_id: user.id,
@@ -83,7 +82,6 @@ const TripPreview = () => {
       });
       if (memberErr) throw memberErr;
 
-      // Create payment record
       await supabase.from("payments").insert({
         trip_id: trip.id,
         user_id: user.id,
@@ -94,7 +92,7 @@ const TripPreview = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trip-member-count", tripId] });
-      toast({ title: "You're in! 🎉", description: "Welcome to the trip." });
+      toast({ title: "You're in!", description: "Welcome to the trip." });
       navigate(`/trip/${tripId}`);
     },
     onError: (err: any) => {
@@ -126,7 +124,7 @@ const TripPreview = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-4xl">😢</p>
-        <p className="text-foreground font-semibold">Trip not found</p>
+        <p className="text-foreground font-medium">Trip not found</p>
         <button onClick={() => navigate("/")} className="text-primary text-sm">← Back home</button>
       </div>
     );
@@ -144,7 +142,7 @@ const TripPreview = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Cover Image */}
-      <div className="relative w-full h-64 bg-gradient-to-br from-primary/20 via-lavender/30 to-peach/20 overflow-hidden">
+      <div className="relative w-full h-64 bg-primary/10 overflow-hidden">
         {trip.cover_image_url && (
           <img src={trip.cover_image_url} alt={trip.name} className="absolute inset-0 w-full h-full object-cover" />
         )}
@@ -159,15 +157,15 @@ const TripPreview = () => {
       <div className="px-4 -mt-12 relative z-10 pb-32">
         {/* Host Info */}
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant="secondary" className="text-[10px] font-semibold gap-1">
+          <Badge variant="secondary" className="text-[10px] font-medium gap-1">
             <Sparkles className="h-3 w-3" /> Creator Hosted
           </Badge>
         </div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-3xl font-display font-bold text-foreground">{trip.name}</h1>
+          <h1 className="text-3xl font-display font-semibold text-foreground">{trip.name}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Hosted by <span className="font-semibold text-foreground">{hostProfile?.display_name || "Host"}</span>
+            Hosted by <span className="font-medium text-foreground">{hostProfile?.display_name || "Host"}</span>
           </p>
           {trip.host_bio && (
             <p className="text-xs text-muted-foreground mt-1 italic">"{trip.host_bio}"</p>
@@ -179,12 +177,12 @@ const TripPreview = () => {
           <Card className="border-0 shadow-sm">
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">📍 Destination</span>
-                <span className="text-sm font-semibold">{trip.destination}</span>
+                <span className="text-sm text-muted-foreground">Destination</span>
+                <span className="text-sm font-medium">{trip.destination}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">📅 Dates</span>
-                <span className="text-sm font-semibold">
+                <span className="text-sm text-muted-foreground">Dates</span>
+                <span className="text-sm font-medium">
                   {format(new Date(trip.start_date), "MMM d")} – {format(new Date(trip.end_date), "MMM d, yyyy")}
                 </span>
               </div>
@@ -207,15 +205,15 @@ const TripPreview = () => {
           )}
 
           {/* Pricing */}
-          <Card className="border-0 shadow-md glass-card">
+          <Card className="border-0 shadow-sm glass-card">
             <CardContent className="p-5 text-center space-y-2">
               <p className="text-sm text-muted-foreground">Estimated total per person</p>
-              <p className="text-4xl font-display font-bold text-foreground">
+              <p className="text-4xl font-display font-semibold text-foreground">
                 ${trip.per_person_budget?.toLocaleString()}
               </p>
               {installmentAmount > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  or 3 payments of <span className="font-semibold">${installmentAmount.toLocaleString()}</span>
+                  or 3 payments of <span className="font-medium">${installmentAmount.toLocaleString()}</span>
                 </p>
               )}
             </CardContent>
@@ -226,7 +224,7 @@ const TripPreview = () => {
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4 text-center">
                 <Users className="h-5 w-5 text-primary mx-auto mb-1" />
-                <p className="text-lg font-bold">{memberCount} / {maxSpots}</p>
+                <p className="text-lg font-display font-semibold">{memberCount} / {maxSpots}</p>
                 <p className="text-[10px] text-muted-foreground">Spots Claimed</p>
               </CardContent>
             </Card>
@@ -234,7 +232,7 @@ const TripPreview = () => {
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 text-center">
                   <Clock className="h-5 w-5 text-primary mx-auto mb-1" />
-                  <p className="text-lg font-bold">{deadlineDays}</p>
+                  <p className="text-lg font-display font-semibold">{deadlineDays}</p>
                   <p className="text-[10px] text-muted-foreground">Days to Join</p>
                 </CardContent>
               </Card>
@@ -248,7 +246,7 @@ const TripPreview = () => {
         <Button
           onClick={handleSecureSpot}
           disabled={joinTrip.isPending || spotsRemaining <= 0}
-          className="w-full rounded-xl h-14 text-base font-bold shadow-lg"
+          className="w-full rounded-xl h-14 text-base font-medium shadow-sm"
         >
           {joinTrip.isPending ? (
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -263,7 +261,7 @@ const TripPreview = () => {
         </Button>
         {spotsRemaining > 0 && spotsRemaining <= 5 && (
           <p className="text-center text-xs text-muted-foreground mt-2">
-            Only {spotsRemaining} spot{spotsRemaining > 1 ? "s" : ""} left!
+            Only {spotsRemaining} spot{spotsRemaining > 1 ? "s" : ""} left
           </p>
         )}
       </div>

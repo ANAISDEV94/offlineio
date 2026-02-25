@@ -6,8 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 const slides = [
   {
     emoji: "✈️",
-    title: "Welcome to DÉPARTE!",
-    description: "Your ultimate girls' trip planner.",
+    title: "Welcome to Offline",
+    description: "Plan group trips with structure and ease.",
   },
   {
     emoji: "💰",
@@ -27,7 +27,7 @@ const slides = [
   {
     emoji: "🎉",
     title: "Hype",
-    description: "Countdown to takeoff, post your outfits, and check off your packing list. Let's gooo! 💅",
+    description: "Countdown to takeoff, post your outfits, and check off your packing list.",
   },
 ];
 
@@ -97,7 +97,7 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
             >
               {slide.emoji}
             </motion.span>
-            <h2 className="text-2xl font-display font-bold text-foreground mb-3">
+            <h2 className="text-2xl font-display font-semibold text-foreground mb-3">
               {slide.title}
             </h2>
             <p className="text-muted-foreground leading-relaxed">{slide.description}</p>
@@ -124,7 +124,7 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
         )}
         {isLast ? (
           <Button className="flex-1 rounded-xl" onClick={dismiss}>
-            Let's go! 🎉
+            Get Started
           </Button>
         ) : (
           <Button className="flex-1 rounded-xl" onClick={next}>

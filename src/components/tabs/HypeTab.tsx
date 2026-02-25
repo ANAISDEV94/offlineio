@@ -48,7 +48,6 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
     },
   });
 
-  // Outfit posts
   const { data: outfits = [] } = useQuery({
     queryKey: ["outfit-posts", tripId],
     queryFn: async () => {
@@ -67,7 +66,6 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
     },
   });
 
-  // Packing items
   const { data: packItems = [] } = useQuery({
     queryKey: ["packing-items", tripId, user?.id],
     queryFn: async () => {
@@ -123,7 +121,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
       if (insertError) throw insertError;
       queryClient.invalidateQueries({ queryKey: ["outfit-posts", tripId] });
       setCaption("");
-      toast({ title: "Outfit posted! 👗✨" });
+      toast({ title: "Outfit posted" });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
@@ -142,17 +140,10 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
     <div className="space-y-6">
       {/* Countdown hero */}
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/10 via-lavender/30 to-peach/20">
+        <Card className="border-0 shadow-sm bg-primary/5">
           <CardContent className="p-6 text-center">
-            <p className="text-5xl font-display font-bold text-foreground">{daysUntil}</p>
-            <p className="text-sm text-muted-foreground mt-1">days until {trip?.destination || "your trip"} ✈️</p>
-            <motion.p
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="text-lg mt-2"
-            >
-              ✨💅🌴
-            </motion.p>
+            <p className="text-5xl font-display font-semibold text-foreground">{daysUntil}</p>
+            <p className="text-sm text-muted-foreground mt-1">days until {trip?.destination || "your trip"}</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -160,7 +151,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
       {/* Timeline */}
       {notifications.length > 0 && (
         <div>
-          <h3 className="font-display font-bold text-base mb-3">Hype Timeline</h3>
+          <h3 className="font-display font-medium text-base mb-3">Timeline</h3>
           <div className="relative">
             <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
             <div className="space-y-3">
@@ -168,12 +159,12 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
                 const isPast = msg.trigger_date ? new Date(msg.trigger_date) < new Date() : false;
                 return (
                   <motion.div key={msg.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }} className="relative pl-10">
-                    <div className={`absolute left-2.5 top-3 h-3 w-3 rounded-full border-2 border-background ${msg.type === "payment" ? "bg-gold" : "bg-primary"} ${isPast ? "opacity-50" : ""}`} />
+                    <div className={`absolute left-2.5 top-3 h-3 w-3 rounded-full border-2 border-background ${msg.type === "payment" ? "bg-accent" : "bg-primary"} ${isPast ? "opacity-50" : ""}`} />
                     <Card className={`border-0 shadow-sm ${isPast ? "opacity-50" : ""}`}>
                       <CardContent className="p-3">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="secondary" className={`text-[10px] px-1.5 ${msg.type === "payment" ? "bg-gold/20" : "bg-primary/10"}`}>
-                            {msg.type === "payment" ? "💰 Payment" : "🎉 Hype"}
+                          <Badge variant="secondary" className={`text-[10px] px-1.5 ${msg.type === "payment" ? "bg-accent/20" : "bg-primary/10"}`}>
+                            {msg.type === "payment" ? "Payment" : "Update"}
                           </Badge>
                           {msg.trigger_date && (
                             <span className="text-[10px] text-muted-foreground">
@@ -194,7 +185,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
 
       {/* Outfit Board */}
       <div>
-        <h3 className="font-display font-bold text-base mb-3">👗 Outfit Board</h3>
+        <h3 className="font-display font-medium text-base mb-3">Outfit Board</h3>
         <div className="space-y-3">
           <div className="flex gap-2">
             <Select value={occasion} onValueChange={setOccasion}>
@@ -215,7 +206,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
             disabled={uploading}
           >
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-            {uploading ? "Uploading..." : "Post Your Fit 📸"}
+            {uploading ? "Uploading..." : "Post Your Outfit"}
           </Button>
         </div>
 
@@ -223,13 +214,13 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
           <div className="grid grid-cols-2 gap-3 mt-4">
             {outfits.map((outfit, i) => (
               <motion.div key={outfit.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
-                <Card className="border-0 shadow-md overflow-hidden">
+                <Card className="border-0 shadow-sm overflow-hidden">
                   <div className="relative">
                     <img src={outfit.image_url} alt={outfit.caption || "Outfit"} className="w-full h-48 object-cover" loading="lazy" />
                     <Badge className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm text-foreground text-[10px]">{outfit.occasion}</Badge>
                   </div>
                   <CardContent className="p-3">
-                    <p className="text-xs font-semibold">{outfit.userName}</p>
+                    <p className="text-xs font-medium">{outfit.userName}</p>
                     {outfit.caption && <p className="text-xs text-muted-foreground">{outfit.caption}</p>}
                     <div className="flex items-center gap-1 mt-2">
                       {outfit.outfit_reactions?.slice(0, 5).map((r: any) => (
@@ -247,11 +238,11 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
 
       {/* Packing Checklist */}
       <div>
-        <h3 className="font-display font-bold text-base mb-3">🧳 Packing Checklist</h3>
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-mint/20 to-lavender/10 mb-3">
+        <h3 className="font-display font-medium text-base mb-3">Packing Checklist</h3>
+        <Card className="border-0 shadow-sm bg-accent/10 mb-3">
           <CardContent className="p-3 text-center">
             <p className="text-sm text-muted-foreground">Packed</p>
-            <p className="text-xl font-display font-bold">{checkedCount} / {packItems.length}</p>
+            <p className="text-xl font-display font-semibold">{checkedCount} / {packItems.length}</p>
           </CardContent>
         </Card>
         <div className="flex gap-2 mb-3">
@@ -261,7 +252,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
           </Button>
         </div>
         {packItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">No items yet. Start adding what you need!</p>
+          <p className="text-sm text-muted-foreground text-center py-4">No items yet. Start adding what you need.</p>
         ) : (
           <div className="space-y-2">
             {packItems.map((item) => (
