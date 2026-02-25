@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { Plane } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -62,16 +62,7 @@ const Auth = () => {
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <motion.div
-            animate={{ y: [0, -6, 0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="inline-block mb-4"
-          >
-            <Plane className="h-8 w-8 text-primary mx-auto" strokeWidth={1.5} />
-          </motion.div>
-          <h1 className="text-4xl font-display font-semibold text-foreground tracking-[0.15em]">
-            offline
-          </h1>
+          <img src={logo} alt="offline" className="h-16 mx-auto mb-2" />
           <p className="text-muted-foreground mt-2">Log off. Lock in.</p>
         </div>
 
