@@ -140,7 +140,7 @@ const Onboarding = () => {
         <div className="w-full max-w-sm space-y-4">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
             <Card
-              className="border-0 shadow-lg shadow-primary/10 cursor-pointer hover:shadow-xl hover:shadow-primary/15 transition-all hover:-translate-y-1"
+              className="border-0 shadow-lg shadow-primary/10 cursor-pointer hover:shadow-xl hover:shadow-primary/15 transition-all hover:-translate-y-1 glass-card"
               onClick={() => navigate("/create-trip")}
             >
               <CardContent className="flex items-center gap-4 p-5">
@@ -158,7 +158,7 @@ const Onboarding = () => {
 
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
             <Card
-              className="border-0 shadow-lg shadow-secondary/20 cursor-pointer hover:shadow-xl hover:shadow-secondary/25 transition-all hover:-translate-y-1"
+              className="border-0 shadow-lg shadow-secondary/20 cursor-pointer hover:shadow-xl hover:shadow-secondary/25 transition-all hover:-translate-y-1 glass-card"
               onClick={() => setShowJoin(!showJoin)}
             >
               <CardContent className="flex items-center gap-4 p-5">

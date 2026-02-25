@@ -10,34 +10,24 @@ const slides = [
     description: "Your ultimate girls' trip planner.",
   },
   {
-    emoji: "🗓️",
+    emoji: "💰",
+    title: "Fund",
+    description: "Track group payments, set installment plans, and keep everyone accountable with the Trip Health Score.",
+  },
+  {
+    emoji: "📋",
     title: "Plan",
-    description: "Build your itinerary day by day and track your budget by category.",
+    description: "Choose a trip template, build your day-by-day itinerary, and manage your budget breakdown.",
   },
   {
-    emoji: "💸",
-    title: "Pay",
-    description: "Split costs, set installment plans, and nudge your girls to pay up.",
+    emoji: "🔓",
+    title: "Unlock",
+    description: "Booking unlocks when your trip is fully funded. Save flights, hotels, and experiences all in one place.",
   },
   {
-    emoji: "🔗",
-    title: "Book",
-    description: "Save flight, hotel, and activity links all in one place.",
-  },
-  {
-    emoji: "🧳",
-    title: "Pack",
-    description: "Get a smart packing checklist based on your destination and vibe.",
-  },
-  {
-    emoji: "👗",
-    title: "Fits",
-    description: "Post your outfits, tag them by occasion, and react with emojis.",
-  },
-  {
-    emoji: "🔥",
+    emoji: "🎉",
     title: "Hype",
-    description: "Countdown messages and payment reminders keep the energy up.",
+    description: "Countdown to takeoff, post your outfits, and check off your packing list. Let's gooo! 💅",
   },
 ];
 
@@ -82,7 +72,6 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6"
     >
-      {/* Skip */}
       <button
         onClick={dismiss}
         className="absolute top-5 right-5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -90,7 +79,6 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
         Skip
       </button>
 
-      {/* Slide */}
       <div className="flex-1 flex flex-col items-center justify-center max-w-sm w-full">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -117,7 +105,6 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
         </AnimatePresence>
       </div>
 
-      {/* Dots */}
       <div className="flex gap-2 mb-6">
         {slides.map((_, i) => (
           <div
@@ -129,7 +116,6 @@ const AppTour = ({ userId, onComplete }: AppTourProps) => {
         ))}
       </div>
 
-      {/* Navigation */}
       <div className="flex gap-3 w-full max-w-sm pb-10">
         {current > 0 && (
           <Button variant="outline" className="flex-1 rounded-xl" onClick={prev}>

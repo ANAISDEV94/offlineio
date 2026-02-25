@@ -5,11 +5,9 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import FundTab from "@/components/tabs/FundTab";
 import PlanTab from "@/components/tabs/PlanTab";
-import PayTab from "@/components/tabs/PayTab";
-import BookTab from "@/components/tabs/BookTab";
-import PackTab from "@/components/tabs/PackTab";
-import FitsTab from "@/components/tabs/FitsTab";
+import UnlockTab from "@/components/tabs/UnlockTab";
 import HypeTab from "@/components/tabs/HypeTab";
 
 const TripDashboard = () => {
@@ -111,22 +109,18 @@ const TripDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="plan" className="px-2 -mt-2">
-        <TabsList className="w-full justify-between bg-card rounded-2xl shadow-sm border-0 h-12 p-1">
+      <Tabs defaultValue="fund" className="px-2 -mt-2">
+        <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
+          <TabsTrigger value="fund" className="rounded-xl text-xs data-[state=active]:shadow-md">💰 Fund</TabsTrigger>
           <TabsTrigger value="plan" className="rounded-xl text-xs data-[state=active]:shadow-md">📋 Plan</TabsTrigger>
-          <TabsTrigger value="pay" className="rounded-xl text-xs data-[state=active]:shadow-md">💰 Pay</TabsTrigger>
-          <TabsTrigger value="book" className="rounded-xl text-xs data-[state=active]:shadow-md">✈️ Book</TabsTrigger>
-          <TabsTrigger value="pack" className="rounded-xl text-xs data-[state=active]:shadow-md">🧳 Pack</TabsTrigger>
-          <TabsTrigger value="fits" className="rounded-xl text-xs data-[state=active]:shadow-md">👗 Fits</TabsTrigger>
+          <TabsTrigger value="unlock" className="rounded-xl text-xs data-[state=active]:shadow-md">🔓 Unlock</TabsTrigger>
           <TabsTrigger value="hype" className="rounded-xl text-xs data-[state=active]:shadow-md">🎉 Hype</TabsTrigger>
         </TabsList>
 
         <div className="mt-4 px-2">
+          <TabsContent value="fund"><FundTab tripId={tripId!} /></TabsContent>
           <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="pay"><PayTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="book"><BookTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="pack"><PackTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="fits"><FitsTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="unlock"><UnlockTab tripId={tripId!} /></TabsContent>
           <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>

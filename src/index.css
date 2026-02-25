@@ -112,3 +112,24 @@
     font-family: 'Playfair Display', serif;
   }
 }
+
+/* Glassmorphism utilities */
+.glass {
+  @apply backdrop-blur-xl border shadow-lg;
+  background: hsl(var(--background) / 0.6);
+  border-color: hsl(var(--border) / 0.3);
+}
+
+.glass-card {
+  @apply backdrop-blur-xl border shadow-lg rounded-2xl;
+  background: hsl(var(--card) / 0.7);
+  border-color: hsl(var(--border) / 0.3);
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
