@@ -3,19 +3,38 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { motion } from "framer-motion";
-import { Users, Plus, ArrowRight, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Users, Plus, ArrowRight, Loader2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import AppTour from "@/components/AppTour";
 
 const Onboarding = () => {
   const [joinCode, setJoinCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signOut, user } = useAuth();
+
+  // Check onboarding_completed flag
+  const { data: profile } = useQuery({
+    queryKey: ["profile-onboarding", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("user_id", user!.id)
+        .single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Show tour automatically for new users
+  const shouldShowTour = profile && !(profile as any).onboarding_completed && !showTour;
 
   const { data: myTrips = [], isLoading } = useQuery({
     queryKey: ["my-trips", user?.id],
@@ -45,7 +64,13 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <>
+      <AnimatePresence>
+        {(shouldShowTour || showTour) && user && (
+          <AppTour userId={user.id} onComplete={() => setShowTour(false)} />
+        )}
+      </AnimatePresence>
+      <div className="min-h-screen bg-background flex flex-col">
       <header className="p-4 flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold text-foreground tracking-tight">DÉPARTE</h1>
         <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -160,9 +185,18 @@ const Onboarding = () => {
               })}
             </motion.div>
           )}
+          {/* How it works link */}
+          <button
+            onClick={() => setShowTour(true)}
+            className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors pt-2"
+          >
+            <HelpCircle className="h-4 w-4" />
+            How it works
+          </button>
         </div>
       </div>
     </div>
+    </>
   );
 };
 
