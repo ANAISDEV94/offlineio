@@ -11,6 +11,7 @@ import TripPreview from "./pages/TripPreview";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import AdminDebug from "./pages/AdminDebug";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/create-trip" element={<CreateTrip />} />
           <Route path="/trip/preview/:tripId" element={<TripPreview />} />
           <Route path="/trip/:tripId" element={<TripDashboard />} />

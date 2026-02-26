@@ -24,7 +24,7 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -33,10 +33,15 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast({
-          title: "Check your email ✉️",
-          description: "We sent you a confirmation link to verify your account.",
-        });
+        if (data.session) {
+          toast({ title: "Welcome! 🎉", description: "Your account has been created." });
+          navigate("/");
+        } else {
+          toast({
+            title: "Check your email ✉️",
+            description: "We sent you a confirmation link to verify your account.",
+          });
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -48,6 +53,25 @@ const Auth = () => {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({ title: "Enter your email first", description: "We need your email to send a reset link.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: "Reset link sent ✉️", description: "Check your email for a password reset link." });
+    } catch (error: any) {
+      toast({ title: "Something went wrong", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -123,7 +147,18 @@ const Auth = () => {
                 {loading ? "One moment..." : isSignUp ? "Sign Up" : "Sign In"}
               </Button>
             </form>
-            <div className="mt-6 text-center">
+            {!isSignUp && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            )}
+            <div className="mt-4 text-center">
               <button
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
