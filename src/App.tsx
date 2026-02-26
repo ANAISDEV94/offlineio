@@ -9,6 +9,8 @@ import CreateTrip from "./pages/CreateTrip";
 import TripDashboard from "./pages/TripDashboard";
 import TripPreview from "./pages/TripPreview";
 import NotFound from "./pages/NotFound";
+import Settings from "./pages/Settings";
+import AdminDebug from "./pages/AdminDebug";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +26,8 @@ const App = () => (
           <Route path="/create-trip" element={<CreateTrip />} />
           <Route path="/trip/preview/:tripId" element={<TripPreview />} />
           <Route path="/trip/:tripId" element={<TripDashboard />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/admin/debug" element={<AdminDebug />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
