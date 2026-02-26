@@ -1,3 +1,7 @@
+// supabase/functions/stripe-webhook/index.ts
+// POST — receives Stripe webhook events, verifies signature,
+// records payments on checkout.session.completed.
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -5,7 +9,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, stripe-signature",
 };
 
 serve(async (req) => {
@@ -19,78 +23,112 @@ serve(async (req) => {
 
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
   try {
+    // ---- 1. Verify Stripe signature (mandatory) ----
     const body = await req.text();
-    const sig = req.headers.get("stripe-signature");
+    const signature = req.headers.get("stripe-signature");
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+
+    if (!signature || !webhookSecret) {
+      console.error("Missing stripe-signature header or STRIPE_WEBHOOK_SECRET");
+      return new Response("Missing signature or webhook secret", { status: 400 });
+    }
 
     let event: Stripe.Event;
-
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-    } else {
-      event = JSON.parse(body) as Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return new Response(`Webhook signature invalid: ${err}`, { status: 400 });
     }
 
+    // ---- 2. Handle checkout.session.completed ----
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const { tripId, userId, amount } = session.metadata || {};
+      const tripId = session.metadata?.trip_id ?? session.metadata?.tripId;
+      const userId = session.metadata?.user_id ?? session.metadata?.userId;
+      const amountCents = session.amount_total; // Stripe returns cents
 
-      if (tripId && userId && amount) {
-        const paymentAmount = parseFloat(amount);
+      if (!tripId || !userId || amountCents == null) {
+        console.error("Missing metadata on session:", session.id);
+        // Return 200 so Stripe doesn't retry — data issue, not transient.
+        return new Response("Missing metadata — skipped", { status: 200 });
+      }
 
-        // Get current payment
-        const { data: payment } = await supabaseAdmin
+      // Convert cents → dollars to match existing DB schema
+      const amountDollars = amountCents / 100;
+
+      // ---- 3. Idempotent insert into payment_history ----
+      // The unique constraint on stripe_event_id prevents duplicate processing.
+      const { error: historyErr } = await supabaseAdmin
+        .from("payment_history")
+        .insert({
+          trip_id: tripId,
+          user_id: userId,
+          amount: amountDollars,
+          status: "paid",
+          stripe_session_id: session.id,
+          stripe_event_id: event.id,
+        });
+
+      if (historyErr) {
+        // 23505 = unique_violation (duplicate stripe_event_id)
+        if (historyErr.code === "23505") {
+          console.log("Duplicate event — already processed:", event.id);
+          return _ok();
+        }
+        console.error("Insert payment_history failed:", historyErr);
+        return new Response("Database error", { status: 500 });
+      }
+
+      // ---- 4. Update the member's running total in payments ----
+      const { data: payment } = await supabaseAdmin
+        .from("payments")
+        .select("id, amount_paid, amount")
+        .eq("trip_id", tripId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (payment) {
+        const newAmountPaid = Math.min(
+          Number(payment.amount_paid) + amountDollars,
+          Number(payment.amount),
+        );
+        const newStatus = newAmountPaid >= Number(payment.amount) ? "paid" : "partial";
+
+        const { error: updateErr } = await supabaseAdmin
           .from("payments")
-          .select("amount_paid, amount")
-          .eq("trip_id", tripId)
-          .eq("user_id", userId)
-          .single();
+          .update({
+            amount_paid: newAmountPaid,
+            status: newStatus,
+          })
+          .eq("id", payment.id);
 
-        if (payment) {
-          const newAmountPaid = Math.min(
-            Number(payment.amount_paid) + paymentAmount,
-            Number(payment.amount)
-          );
-          const newStatus = newAmountPaid >= Number(payment.amount) ? "paid" : "partial";
-
-          await supabaseAdmin
-            .from("payments")
-            .update({
-              amount_paid: newAmountPaid,
-              status: newStatus,
-            })
-            .eq("trip_id", tripId)
-            .eq("user_id", userId);
-
-          // Insert into payment_history
-          await supabaseAdmin
-            .from("payment_history")
-            .insert({
-              trip_id: tripId,
-              user_id: userId,
-              amount: paymentAmount,
-              status: "paid",
-              stripe_session_id: session.id,
-            });
-
-          console.log(`Payment updated: user=${userId} trip=${tripId} amount=${paymentAmount} total=${newAmountPaid}`);
+        if (updateErr) {
+          console.error("Update payments failed:", updateErr);
+          // Don't return 500 — the payment_history row is already written,
+          // so retrying would hit the idempotency guard. Log and continue.
         }
       }
+
+      console.log(
+        `Payment recorded: event=${event.id} trip=${tripId} user=${userId} amount=$${amountDollars}`,
+      );
     }
 
-    return new Response(JSON.stringify({ received: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return _ok();
   } catch (error) {
-    console.error("Webhook error:", (error as Error).message);
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
-    });
+    console.error("stripe-webhook unhandled error:", error);
+    return new Response("Internal error", { status: 500 });
   }
 });
+
+function _ok() {
+  return new Response(JSON.stringify({ received: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}

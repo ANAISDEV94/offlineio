@@ -140,8 +140,9 @@ const FundTab = ({ tripId }: FundTabProps) => {
     if (!user || paymentAmount <= 0) return;
     setPayingAmount(paymentAmount.toString());
     try {
+      const amountCents = Math.round(paymentAmount * 100);
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { tripId, amount: paymentAmount },
+        body: { trip_id: tripId, amount_cents: amountCents },
       });
       if (error) throw error;
       if (data?.url) window.open(data.url, "_blank");
