@@ -73,7 +73,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       }
       const { error: insertError } = await supabase.from("trip_members").insert({ trip_id: tripId, user_id: data.userId, role: "member" });
       if (insertError) throw insertError;
-      await supabase.from("payments").insert({ trip_id: tripId, user_id: data.userId, amount: dashboard.per_person_cost, amount_paid: 0 });
       toast({ title: "Member added", description: `${data.displayName} has been added to the trip` });
       refresh();
     } catch {
