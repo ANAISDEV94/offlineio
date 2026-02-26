@@ -1,8 +1,16 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CreditCard, Package, Shield, CalendarDays, LogOut, Settings, Pencil, Check, X } from "lucide-react";
+import { format } from "date-fns";
 import InviteCodeCard from "@/components/overview/InviteCodeCard";
 import QuickStats from "@/components/overview/QuickStats";
 import TripDetailsCard from "@/components/overview/TripDetailsCard";
@@ -17,19 +25,17 @@ interface OverviewTabProps {
 }
 
 const OverviewTab = ({ tripId }: OverviewTabProps) => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [replanOpen, setReplanOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState("");
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", tripId)
-        .maybeSingle();
+      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -39,24 +45,13 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
   const { data: members = [] } = useQuery({
     queryKey: ["trip-members", tripId],
     queryFn: async () => {
-      const { data: memberRows, error } = await supabase
-        .from("trip_members")
-        .select("*")
-        .eq("trip_id", tripId);
+      const { data: memberRows, error } = await supabase.from("trip_members").select("*").eq("trip_id", tripId);
       if (error) throw error;
-
       const userIds = memberRows.map((m) => m.user_id);
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, avatar_url")
-        .in("user_id", userIds);
-
+      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, avatar_url").in("user_id", userIds);
       return memberRows.map((m) => ({
         ...m,
-        profile: profiles?.find((p) => p.user_id === m.user_id) || {
-          display_name: null,
-          avatar_url: null,
-        },
+        profile: profiles?.find((p) => p.user_id === m.user_id) || { display_name: null, avatar_url: null },
       }));
     },
     enabled: !!tripId,
@@ -65,40 +60,91 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
   const { data: payments = [] } = useQuery({
     queryKey: ["trip-payments-overview", tripId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("user_id, amount, amount_paid, status")
-        .eq("trip_id", tripId);
+      const { data, error } = await supabase.from("payments").select("user_id, amount, amount_paid, status").eq("trip_id", tripId);
       if (error) throw error;
       return data;
     },
     enabled: !!tripId,
   });
 
+  // My data
+  const { data: myPayment } = useQuery({
+    queryKey: ["my-payment", tripId, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("payments").select("*").eq("trip_id", tripId).eq("user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tripId && !!user?.id,
+  });
+
+  const { data: myMembership } = useQuery({
+    queryKey: ["my-membership", tripId, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("trip_members").select("role").eq("trip_id", tripId).eq("user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tripId && !!user?.id,
+  });
+
+  const { data: myProfile } = useQuery({
+    queryKey: ["my-profile", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("display_name").eq("user_id", user!.id).single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: packingItems = [] } = useQuery({
+    queryKey: ["my-packing-overview", tripId, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("packing_items").select("*").eq("trip_id", tripId).eq("user_id", user!.id).order("created_at");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tripId && !!user?.id,
+  });
+
+  const togglePacking = useMutation({
+    mutationFn: async ({ id, checked }: { id: string; checked: boolean }) => {
+      const { error } = await supabase.from("packing_items").update({ is_checked: checked }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-packing-overview", tripId] }),
+  });
+
+  const updateDisplayName = useMutation({
+    mutationFn: async () => {
+      if (!newDisplayName.trim() || !user) return;
+      const { error } = await supabase.from("profiles").update({ display_name: newDisplayName.trim() }).eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
+      setEditingName(false);
+      toast({ title: "Name updated" });
+    },
+  });
+
   if (!trip) return null;
 
-  const isOrganizer = members.some(
-    (m) => m.user_id === user?.id && m.role === "organizer"
-  );
+  const isOrganizer = members.some((m) => m.user_id === user?.id && m.role === "organizer");
 
-  const daysUntil = Math.ceil(
-    (new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
+  const daysUntil = Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
   const totalOwed = payments.reduce((s, p) => s + Number(p.amount), 0);
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
   const fundingPct = totalOwed > 0 ? Math.round((totalPaid / totalOwed) * 100) : 0;
-  const onTrackCount = payments.filter(
-    (p) => p.status === "paid" || Number(p.amount_paid) >= Number(p.amount) * 0.5
-  ).length;
+  const onTrackCount = payments.filter((p) => p.status === "paid" || Number(p.amount_paid) >= Number(p.amount) * 0.5).length;
   const shortfall = totalOwed - totalPaid;
   const showBudgetAlert = fundingPct < 100 && daysUntil <= 90 && daysUntil > 0 && shortfall > 0;
 
   const paymentDeadlineDays = trip.payment_deadline
-    ? Math.ceil(
-        (new Date(trip.payment_deadline).getTime() - Date.now()) /
-          (1000 * 60 * 60 * 24)
-      )
+    ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
   const handleRemoveMember = async (memberId: string) => {
@@ -124,105 +170,179 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
 
   const handleAddMember = async (email: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("lookup-user-by-email", {
-        body: { email, tripId },
-      });
+      const { data, error } = await supabase.functions.invoke("lookup-user-by-email", { body: { email, tripId } });
       if (error || data?.error) {
         toast({ title: "Error", description: data?.error || "User not found", variant: "destructive" });
         return;
       }
-
-      // Check if already a member
       if (members.some((m) => m.user_id === data.userId)) {
         toast({ title: "Already a member", variant: "destructive" });
         return;
       }
-
-      // Add to trip_members
-      const { error: insertError } = await supabase.from("trip_members").insert({
-        trip_id: tripId,
-        user_id: data.userId,
-        role: "member",
-      });
+      const { error: insertError } = await supabase.from("trip_members").insert({ trip_id: tripId, user_id: data.userId, role: "member" });
       if (insertError) throw insertError;
-
-      // Create payment record
-      await supabase.from("payments").insert({
-        trip_id: tripId,
-        user_id: data.userId,
-        amount: Number(trip.per_person_budget),
-        amount_paid: 0,
-      });
-
+      await supabase.from("payments").insert({ trip_id: tripId, user_id: data.userId, amount: Number(trip.per_person_budget), amount_paid: 0 });
       toast({ title: "Member added", description: `${data.displayName} has been added to the trip` });
       queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
       queryClient.invalidateQueries({ queryKey: ["trip-payments-overview", tripId] });
-    } catch (e) {
+    } catch {
       toast({ title: "Error", description: "Failed to add member", variant: "destructive" });
     }
   };
 
   const tripContext = {
-    destination: trip.destination,
-    startDate: trip.start_date,
-    endDate: trip.end_date,
-    memberCount: members.length,
-    originalPerPerson: Number(trip.per_person_budget),
-    originalTotal: totalOwed,
-    collectedTotal: totalPaid,
-    shortfall,
-    vibe: trip.vibe,
+    destination: trip.destination, startDate: trip.start_date, endDate: trip.end_date,
+    memberCount: members.length, originalPerPerson: Number(trip.per_person_budget),
+    originalTotal: totalOwed, collectedTotal: totalPaid, shortfall, vibe: trip.vibe,
   };
+
+  const paidPct = myPayment && Number(myPayment.amount) > 0 ? Math.round((Number(myPayment.amount_paid) / Number(myPayment.amount)) * 100) : 0;
+  const remaining = myPayment ? Math.max(0, Number(myPayment.amount) - Number(myPayment.amount_paid)) : 0;
+  const packedCount = packingItems.filter((i) => i.is_checked).length;
 
   return (
     <div className="space-y-4">
-      <QuickStats
-        membersCount={members.length}
-        daysUntil={daysUntil}
-        fundingPct={fundingPct}
-      />
-
+      <QuickStats membersCount={members.length} daysUntil={daysUntil} fundingPct={fundingPct} />
       <TripDetailsCard trip={trip} />
-
       <InviteCodeCard inviteCode={trip.invite_code} />
-
-      <GroupFundingCard
-        fundingPct={fundingPct}
-        onTrackCount={onTrackCount}
-        membersCount={members.length}
-      />
+      <GroupFundingCard fundingPct={fundingPct} onTrackCount={onTrackCount} membersCount={members.length} />
 
       {showBudgetAlert && (
-        <BudgetAlertCard
-          shortfall={shortfall}
-          totalPaid={totalPaid}
-          onReplan={() => setReplanOpen(true)}
-        />
+        <BudgetAlertCard shortfall={shortfall} totalPaid={totalPaid} onReplan={() => setReplanOpen(true)} />
       )}
 
       {trip.payment_deadline && paymentDeadlineDays !== null && (
-        <PaymentDeadlineCard
-          paymentDeadline={trip.payment_deadline}
-          paymentDeadlineDays={paymentDeadlineDays}
-        />
+        <PaymentDeadlineCard paymentDeadline={trip.payment_deadline} paymentDeadlineDays={paymentDeadlineDays} />
       )}
 
       <MembersCard
-        members={members}
-        payments={payments}
-        isOrganizer={isOrganizer}
-        currentUserId={user?.id}
-        onRemoveMember={handleRemoveMember}
-        onToggleRole={handleToggleRole}
-        onAddMember={handleAddMember}
+        members={members} payments={payments} isOrganizer={isOrganizer}
+        currentUserId={user?.id} onRemoveMember={handleRemoveMember}
+        onToggleRole={handleToggleRole} onAddMember={handleAddMember}
         maxSpots={trip.max_spots || trip.group_size}
       />
 
-      <ReplanChat
-        open={replanOpen}
-        onOpenChange={setReplanOpen}
-        tripContext={tripContext}
-      />
+      {/* My Role */}
+      <Card className="rounded-2xl border-0 bg-primary/5 shadow-sm">
+        <CardContent className="p-4 flex items-center gap-3">
+          <Shield className="h-5 w-5 text-primary" />
+          <div>
+            <p className="text-sm font-medium text-foreground">My Role</p>
+            <p className="text-xs text-muted-foreground capitalize">{myMembership?.role || "Member"}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* My Payment */}
+      <Card className="rounded-2xl border-0 bg-card shadow-sm">
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+            <CreditCard className="h-3.5 w-3.5 text-primary" /> My Payment
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          {myPayment ? (
+            <div className="space-y-3">
+              <Progress value={paidPct} className="h-2.5 rounded-full" />
+              <p className="text-xs text-muted-foreground">{paidPct}% paid</p>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs">Paid</p>
+                  <p className="font-semibold text-foreground">${Number(myPayment.amount_paid).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Remaining</p>
+                  <p className="font-semibold text-foreground">${remaining.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Total Owed</p>
+                  <p className="font-semibold text-foreground">${Number(myPayment.amount).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Plan</p>
+                  <p className="font-semibold text-foreground capitalize">{myPayment.installment_plan}</p>
+                </div>
+              </div>
+              {myPayment.next_due_date && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-border">
+                  <CalendarDays className="h-3 w-3" />
+                  Next due: {format(new Date(myPayment.next_due_date), "MMM d, yyyy")}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">No payment plan set up yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* My Packing List */}
+      <Card className="rounded-2xl border-0 bg-card shadow-sm">
+        <CardHeader className="p-4 pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <Package className="h-3.5 w-3.5 text-primary" /> My Packing List
+            </CardTitle>
+            {packingItems.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{packedCount}/{packingItems.length} packed</span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          {packingItems.length > 0 ? (
+            <div className="space-y-2">
+              {packingItems.map((item) => (
+                <label key={item.id} className="flex items-center gap-2.5 py-1 cursor-pointer">
+                  <Checkbox checked={item.is_checked} onCheckedChange={(checked) => togglePacking.mutate({ id: item.id, checked: !!checked })} />
+                  <span className={`text-sm ${item.is_checked ? "line-through text-muted-foreground" : "text-foreground"}`}>{item.item_name}</span>
+                  {item.is_suggested && <Badge variant="outline" className="text-[9px] ml-auto">Suggested</Badge>}
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">No packing items yet. Add some in the Hype tab!</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Settings */}
+      <Card className="rounded-2xl border-0 bg-card shadow-sm">
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+            <Settings className="h-3.5 w-3.5 text-primary" /> Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Display Name</p>
+              {editingName ? (
+                <div className="flex gap-2 mt-1">
+                  <Input value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="rounded-xl text-sm h-8 w-40" />
+                  <Button size="sm" className="h-8 rounded-xl" onClick={() => updateDisplayName.mutate()}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 rounded-xl" onClick={() => setEditingName(false)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{myProfile?.display_name || "Not set"}</p>
+              )}
+            </div>
+            {!editingName && (
+              <button onClick={() => { setEditingName(true); setNewDisplayName(myProfile?.display_name || ""); }}>
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+              </button>
+            )}
+          </div>
+          <Button variant="outline" className="w-full rounded-xl gap-2" onClick={signOut}>
+            <LogOut className="h-3.5 w-3.5" /> Sign Out
+          </Button>
+        </CardContent>
+      </Card>
+
+      <ReplanChat open={replanOpen} onOpenChange={setReplanOpen} tripContext={tripContext} />
     </div>
   );
 };

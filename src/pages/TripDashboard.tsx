@@ -14,7 +14,6 @@ import FundTab from "@/components/tabs/FundTab";
 import PlanTab from "@/components/tabs/PlanTab";
 import UnlockTab from "@/components/tabs/UnlockTab";
 import HypeTab from "@/components/tabs/HypeTab";
-import MyTripTab from "@/components/tabs/MyTripTab";
 
 const TripDashboard = () => {
   const navigate = useNavigate();
@@ -183,7 +182,6 @@ const TripDashboard = () => {
           <TabsTrigger value="plan" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
           <TabsTrigger value="unlock" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🔓 Unlock</TabsTrigger>
           <TabsTrigger value="hype" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
-          <TabsTrigger value="me" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">👤 Me</TabsTrigger>
         </TabsList>
 
         <div className="mt-4 px-2">
@@ -192,7 +190,6 @@ const TripDashboard = () => {
           <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
           <TabsContent value="unlock"><UnlockTab tripId={tripId!} /></TabsContent>
           <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="me"><MyTripTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>
     </div>

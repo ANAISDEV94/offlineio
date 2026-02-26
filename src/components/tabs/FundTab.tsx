@@ -1,20 +1,26 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
-import { Loader2, Shield, Users } from "lucide-react";
+import { Loader2, Shield, Users, CreditCard } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface FundTabProps {
   tripId: string;
 }
 
 const FundTab = ({ tripId }: FundTabProps) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [noDrama, setNoDrama] = useState(false);
+  const [payingAmount, setPayingAmount] = useState<string | null>(null);
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
@@ -59,6 +65,24 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const deadlineDays = trip?.payment_deadline
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
+
+  const handlePay = async (paymentAmount: number) => {
+    if (!user || paymentAmount <= 0) return;
+    setPayingAmount(paymentAmount.toString());
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { tripId, amount: paymentAmount },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (err: any) {
+      toast({ title: "Payment error", description: err.message, variant: "destructive" });
+    } finally {
+      setPayingAmount(null);
+    }
+  };
 
   if (isLoading) {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -191,23 +215,51 @@ const FundTab = ({ tripId }: FundTabProps) => {
             const pct = Number(m.amount) > 0 ? Math.round((Number(m.amount_paid) / Number(m.amount)) * 100) : 0;
             const status = pct >= 100 ? "Paid in Full" : pct >= 50 ? "On Track" : "Behind";
             const statusColor = pct >= 100 ? "bg-accent/20" : pct >= 50 ? "bg-secondary" : "bg-primary/10";
+            const isMe = m.user_id === user?.id;
+            const remaining = Math.max(0, Number(m.amount) - Number(m.amount_paid));
             return (
               <motion.div key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <Card className="border-0 shadow-sm">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{m.displayName}</p>
-                      {noDrama ? (
-                        <p className="text-xs text-muted-foreground">{pct}% complete</p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          ${Number(m.amount_paid).toLocaleString()} / ${Number(m.amount).toLocaleString()}
-                        </p>
-                      )}
+                <Card className={`border-0 shadow-sm ${isMe ? "ring-1 ring-primary/30" : ""}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">{m.displayName} {isMe && <span className="text-primary text-xs">(You)</span>}</p>
+                        {noDrama ? (
+                          <p className="text-xs text-muted-foreground">{pct}% complete</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            ${Number(m.amount_paid).toLocaleString()} / ${Number(m.amount).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      <Badge className={`text-[10px] ${statusColor} text-foreground border-0`}>
+                        {status}
+                      </Badge>
                     </div>
-                    <Badge className={`text-[10px] ${statusColor} text-foreground border-0`}>
-                      {status}
-                    </Badge>
+                    {isMe && remaining > 0 && (
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          className="rounded-xl flex-1 gap-1.5"
+                          onClick={() => handlePay(remaining)}
+                          disabled={payingAmount !== null}
+                        >
+                          {payingAmount ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                          Pay ${remaining.toLocaleString()}
+                        </Button>
+                        {remaining > 100 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl gap-1.5"
+                            onClick={() => handlePay(Math.round(remaining / 2))}
+                            disabled={payingAmount !== null}
+                          >
+                            Pay Half
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
