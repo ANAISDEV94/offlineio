@@ -237,13 +237,26 @@ const FundTab = ({ tripId }: FundTabProps) => {
             onClick={async () => {
               setIsContributing(true);
               try {
-                const { data, error } = await supabase.functions.invoke("create-checkout", {
-                  body: { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) },
-                });
+                const payload = { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) };
+                console.log("[Contribute] trip.id:", tripId);
+                console.log("[Contribute] contributionAmount:", contributionAmount);
+                console.log("[Contribute] payload:", payload);
+
+                const { data, error } = await supabase.functions.invoke("create-checkout", { body: payload });
+
+                console.log("[Contribute] full response data:", data);
+                console.log("[Contribute] full response error:", error);
+
                 if (error) throw error;
-                if (data?.url) window.open(data.url, "_blank");
+
+                if (data?.url) {
+                  console.log("[Contribute] redirecting to:", data.url);
+                  window.open(data.url, "_blank");
+                } else {
+                  console.error("[Contribute] no url in response, full data:", data);
+                }
               } catch (err: any) {
-                console.error("Contribution error:", err);
+                console.error("[Contribute] caught error object:", err);
                 toast({ title: "Contribution failed", description: err.message, variant: "destructive" });
               } finally {
                 setIsContributing(false);
