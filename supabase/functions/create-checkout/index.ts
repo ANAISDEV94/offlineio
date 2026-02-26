@@ -34,6 +34,7 @@ serve(async (req) => {
 
     // Phase 3 — Authenticate via getClaims()
     const authHeader = req.headers.get("Authorization");
+    console.log("[create-checkout] Authorization header present:", !!authHeader);
     if (!authHeader?.startsWith("Bearer ")) {
       console.error("[create-checkout] No Authorization header");
       return _json({ error: "not_authenticated" }, 401);

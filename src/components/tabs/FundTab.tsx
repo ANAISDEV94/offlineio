@@ -143,12 +143,19 @@ const FundTab = ({ tripId }: FundTabProps) => {
     if (!user || paymentAmount <= 0) return;
     setPayingAmount(paymentAmount.toString());
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: "Please sign in to contribute", variant: "destructive" });
+        setPayingAmount(null);
+        return;
+      }
       const amountCents = Math.round(paymentAmount * 100);
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { trip_id: tripId, amount_cents: amountCents },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
-      if (data?.url) window.open(data.url, "_blank");
+      if (data?.url) window.location.href = data.url;
     } catch (err: any) {
       toast({ title: "Payment error", description: err.message, variant: "destructive" });
     } finally {
