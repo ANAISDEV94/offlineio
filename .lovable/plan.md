@@ -1,46 +1,34 @@
 
 
-## Plan: Simplify Auth Handling in create-checkout Edge Function
+## Plan: Add Boot-Time Debug Log and Verify Edge Function Deployment
 
-### What Changes
+### Problem
+The frontend is already correctly wired to project `seruyblflufhgandrxsf` via auto-managed `.env` and `client.ts` files. If edge functions were deployed to a different project (`ajwc...`), that's a separate deployment -- the functions in THIS project's `supabase/functions/` folder are auto-deployed to `seruyblflufhgandrxsf`.
 
-In `supabase/functions/create-checkout/index.ts`, simplify the authentication section (lines 25-44):
+### Changes
 
-**Remove:**
-- The explicit check for `Authorization` header existence (lines 26-29)
-- The separate `authHeader` variable check
+**1. Add console log on app boot (`src/main.tsx`)**
 
-**Simplify to:**
-- Create the Supabase client by forwarding `req.headers.get("Authorization")` directly (not "parsing" it -- just passing it through)
-- Call `supabase.auth.getUser()` as the sole authentication gate
-- If no user or error, return 401 with `{ error: "Unauthorized" }`
-
-Since `verify_jwt = true` is already set in config.toml, the gateway pre-validates the JWT. The `getUser()` call then retrieves the full user object.
-
-### Technical Detail
-
-Replace lines 25-44 with:
+Add a single debug log after imports to print the active Supabase URL:
 
 ```typescript
-// ---- 1. Authenticate via Supabase auth context ----
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-  { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
-);
-
-const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-if (authError || !user) {
-  return _json({ error: "Unauthorized" }, 401);
-}
+console.log("[App Boot] VITE_SUPABASE_URL:", import.meta.env.VITE_SUPABASE_URL);
 ```
 
-Everything else (body parsing, membership check, funding check, Stripe logic, response) stays identical.
+This lets you verify in the browser console which project the client connects to.
+
+**2. Re-deploy edge functions to this project**
+
+Trigger redeployment of `create-checkout` and `stripe-webhook` to ensure they are live on `seruyblflufhgandrxsf` (not only on some other project).
 
 ### Files Modified
 | File | Change |
 |------|--------|
-| `supabase/functions/create-checkout/index.ts` | Remove manual auth header check, simplify to `getUser()` as sole auth gate |
+| `src/main.tsx` | Add one `console.log` line to print `VITE_SUPABASE_URL` at boot |
 
-No frontend changes. No config.toml changes. No Stripe logic changes.
+### No Changes To
+- `.env` (auto-managed)
+- `client.ts` (auto-generated)
+- Edge function code (already correct)
+- UI/styling
+
