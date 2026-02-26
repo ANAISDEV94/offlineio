@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Package, Shield, LogOut, Settings, Pencil, Check, X } from "lucide-react";
+import { Package, Shield, LogOut, Settings, Pencil, Check, X, Bell } from "lucide-react";
 import { format } from "date-fns";
 import InviteCodeCard from "@/components/overview/InviteCodeCard";
 import TripDetailsCard from "@/components/overview/TripDetailsCard";
@@ -243,6 +243,29 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
 
       {trip.payment_deadline && deadlineDays !== null && (
         <PaymentDeadlineCard paymentDeadline={trip.payment_deadline} paymentDeadlineDays={deadlineDays} />
+      )}
+
+      {/* Deadline Reminders */}
+      {myRemaining > 0 && deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 14 && (
+        <Card className="rounded-2xl border-0 bg-primary/5 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Bell className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {deadlineDays <= 1
+                  ? "24 hours left. Log off. Lock in."
+                  : deadlineDays <= 3
+                  ? "3 days left. Time to lock in."
+                  : deadlineDays <= 7
+                  ? "7 days until deadline. Don't sleep on it."
+                  : "2 weeks out. Stay on track."}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                You have ${myRemaining.toLocaleString()} remaining
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <MembersCard
