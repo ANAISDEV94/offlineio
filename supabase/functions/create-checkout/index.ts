@@ -30,6 +30,18 @@ serve(async (req) => {
       throw new Error("Missing tripId or invalid amount");
     }
 
+    // Fetch trip name for better Stripe receipt
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+    const { data: tripData } = await supabaseAdmin
+      .from("trips")
+      .select("name")
+      .eq("id", tripId)
+      .single();
+    const tripName = tripData?.name || "Trip";
+
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
     });
@@ -51,8 +63,8 @@ serve(async (req) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "Trip Payment",
-              description: `Payment for trip`,
+              name: `${tripName} — Payment`,
+              description: `Payment for ${tripName}`,
             },
             unit_amount: amountInCents,
           },

@@ -7,18 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CreditCard, Package, Shield, CalendarDays, LogOut, Settings, Pencil, Check, X } from "lucide-react";
+import { Package, Shield, LogOut, Settings, Pencil, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import InviteCodeCard from "@/components/overview/InviteCodeCard";
-import QuickStats from "@/components/overview/QuickStats";
 import TripDetailsCard from "@/components/overview/TripDetailsCard";
-import GroupFundingCard from "@/components/overview/GroupFundingCard";
 import BudgetAlertCard from "@/components/overview/BudgetAlertCard";
 import PaymentDeadlineCard from "@/components/overview/PaymentDeadlineCard";
 import MembersCard from "@/components/overview/MembersCard";
+import FundingSummaryCard from "@/components/overview/FundingSummaryCard";
 import ReplanChat from "@/components/ReplanChat";
+import { computeMemberStatus } from "@/lib/funding-utils";
 
 interface OverviewTabProps {
   tripId: string;
@@ -67,7 +66,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
     enabled: !!tripId,
   });
 
-  // My data
   const { data: myPayment } = useQuery({
     queryKey: ["my-payment", tripId, user?.id],
     queryFn: async () => {
@@ -133,19 +131,42 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
   if (!trip) return null;
 
   const isOrganizer = members.some((m) => m.user_id === user?.id && m.role === "organizer");
-
   const daysUntil = Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
-  const totalOwed = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const totalPaid = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
-  const fundingPct = totalOwed > 0 ? Math.round((totalPaid / totalOwed) * 100) : 0;
-  const onTrackCount = payments.filter((p) => p.status === "paid" || Number(p.amount_paid) >= Number(p.amount) * 0.5).length;
-  const shortfall = totalOwed - totalPaid;
-  const showBudgetAlert = fundingPct < 100 && daysUntil <= 90 && daysUntil > 0 && shortfall > 0;
+  // Funding calculations using total_cost
+  const totalCost = Number((trip as any).total_cost) || payments.reduce((s, p) => s + Number(p.amount), 0);
+  const memberCount = members.length || 1;
+  const perPersonCost = totalCost / memberCount;
+  const totalFunded = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
+  const totalRemaining = totalCost - totalFunded;
+  const fundingPct = totalCost > 0 ? Math.round((totalFunded / totalCost) * 100) : 0;
 
-  const paymentDeadlineDays = trip.payment_deadline
+  const deadlineDays = trip.payment_deadline
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
+
+  // Build member funding list
+  const memberFunding = members.map((m) => {
+    const payment = payments.find((p) => p.user_id === m.user_id);
+    const paid = payment ? Number(payment.amount_paid) : 0;
+    const pct = perPersonCost > 0 ? Math.round((paid / perPersonCost) * 100) : 0;
+    return {
+      userId: m.user_id,
+      displayName: m.profile?.display_name || "Unknown",
+      amountPaid: paid,
+      perPersonCost,
+      status: computeMemberStatus(paid, perPersonCost, deadlineDays),
+      pctComplete: Math.min(100, pct),
+    };
+  });
+
+  const myPaid = myPayment ? Number(myPayment.amount_paid) : 0;
+  const myRemaining = Math.max(0, perPersonCost - myPaid);
+
+  const shortfall = totalRemaining;
+  const showBudgetAlert = fundingPct < 100 && daysUntil <= 90 && daysUntil > 0 && shortfall > 0;
+
+  const packedCount = packingItems.filter((i) => i.is_checked).length;
 
   const handleRemoveMember = async (memberId: string) => {
     const { error } = await supabase.from("trip_members").delete().eq("id", memberId);
@@ -181,7 +202,7 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       }
       const { error: insertError } = await supabase.from("trip_members").insert({ trip_id: tripId, user_id: data.userId, role: "member" });
       if (insertError) throw insertError;
-      await supabase.from("payments").insert({ trip_id: tripId, user_id: data.userId, amount: Number(trip.per_person_budget), amount_paid: 0 });
+      await supabase.from("payments").insert({ trip_id: tripId, user_id: data.userId, amount: perPersonCost, amount_paid: 0 });
       toast({ title: "Member added", description: `${data.displayName} has been added to the trip` });
       queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
       queryClient.invalidateQueries({ queryKey: ["trip-payments-overview", tripId] });
@@ -192,27 +213,36 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
 
   const tripContext = {
     destination: trip.destination, startDate: trip.start_date, endDate: trip.end_date,
-    memberCount: members.length, originalPerPerson: Number(trip.per_person_budget),
-    originalTotal: totalOwed, collectedTotal: totalPaid, shortfall, vibe: trip.vibe,
+    memberCount: members.length, originalPerPerson: perPersonCost,
+    originalTotal: totalCost, collectedTotal: totalFunded, shortfall, vibe: trip.vibe,
   };
-
-  const paidPct = myPayment && Number(myPayment.amount) > 0 ? Math.round((Number(myPayment.amount_paid) / Number(myPayment.amount)) * 100) : 0;
-  const remaining = myPayment ? Math.max(0, Number(myPayment.amount) - Number(myPayment.amount_paid)) : 0;
-  const packedCount = packingItems.filter((i) => i.is_checked).length;
 
   return (
     <div className="space-y-4">
-      <QuickStats membersCount={members.length} daysUntil={daysUntil} fundingPct={fundingPct} />
+      {/* Funding Summary — first thing user sees */}
+      <FundingSummaryCard
+        tripId={tripId}
+        tripName={trip.name}
+        totalCost={totalCost}
+        memberCount={memberCount}
+        totalFunded={totalFunded}
+        paymentDeadline={trip.payment_deadline}
+        members={memberFunding}
+        myPaid={myPaid}
+        myRemaining={myRemaining}
+        userId={user?.id}
+        hasPaymentRecord={!!myPayment}
+      />
+
       <TripDetailsCard trip={trip} />
       <InviteCodeCard inviteCode={trip.invite_code} />
-      <GroupFundingCard fundingPct={fundingPct} onTrackCount={onTrackCount} membersCount={members.length} />
 
       {showBudgetAlert && (
-        <BudgetAlertCard shortfall={shortfall} totalPaid={totalPaid} onReplan={() => setReplanOpen(true)} />
+        <BudgetAlertCard shortfall={shortfall} totalPaid={totalFunded} onReplan={() => setReplanOpen(true)} />
       )}
 
-      {trip.payment_deadline && paymentDeadlineDays !== null && (
-        <PaymentDeadlineCard paymentDeadline={trip.payment_deadline} paymentDeadlineDays={paymentDeadlineDays} />
+      {trip.payment_deadline && deadlineDays !== null && (
+        <PaymentDeadlineCard paymentDeadline={trip.payment_deadline} paymentDeadlineDays={deadlineDays} />
       )}
 
       <MembersCard
@@ -230,49 +260,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
             <p className="text-sm font-medium text-foreground">My Role</p>
             <p className="text-xs text-muted-foreground capitalize">{myMembership?.role || "Member"}</p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* My Payment */}
-      <Card className="rounded-2xl border-0 bg-card shadow-sm">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-            <CreditCard className="h-3.5 w-3.5 text-primary" /> My Payment
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          {myPayment ? (
-            <div className="space-y-3">
-              <Progress value={paidPct} className="h-2.5 rounded-full" />
-              <p className="text-xs text-muted-foreground">{paidPct}% paid</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Paid</p>
-                  <p className="font-semibold text-foreground">${Number(myPayment.amount_paid).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Remaining</p>
-                  <p className="font-semibold text-foreground">${remaining.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Total Owed</p>
-                  <p className="font-semibold text-foreground">${Number(myPayment.amount).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Plan</p>
-                  <p className="font-semibold text-foreground capitalize">{myPayment.installment_plan}</p>
-                </div>
-              </div>
-              {myPayment.next_due_date && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-border">
-                  <CalendarDays className="h-3 w-3" />
-                  Next due: {format(new Date(myPayment.next_due_date), "MMM d, yyyy")}
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">No payment plan set up yet.</p>
-          )}
         </CardContent>
       </Card>
 
