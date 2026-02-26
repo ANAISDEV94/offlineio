@@ -8,13 +8,12 @@ import { Progress } from "@/components/ui/progress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useTripRole } from "@/hooks/useTripRole";
+import { useTripDashboard } from "@/hooks/useTripDashboard";
 import { motion } from "framer-motion";
-import { Loader2, CreditCard, CalendarDays, Clock, History, Wallet, Users, AlertTriangle, Pencil, Check, X } from "lucide-react";
+import { Loader2, CreditCard, CalendarDays, Clock, History, Wallet, Users, AlertTriangle, Pencil, Check, X, ShieldCheck } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, addWeeks } from "date-fns";
-import { computeMemberStatus, computeTripHealth } from "@/lib/funding-utils";
 
 interface FundTabProps {
   tripId: string;
@@ -22,7 +21,7 @@ interface FundTabProps {
 
 const FundTab = ({ tripId }: FundTabProps) => {
   const { user } = useAuth();
-  const { isOrganizer } = useTripRole(tripId);
+  const { dashboard, isLoading, refresh } = useTripDashboard(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [contributionAmount, setContributionAmount] = useState<string>("");
@@ -31,35 +30,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const [customPayments, setCustomPayments] = useState("4");
   const [editingTotal, setEditingTotal] = useState(false);
   const [newTotalCost, setNewTotalCost] = useState("");
-
-  const { data: trip } = useQuery({
-    queryKey: ["trip", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
-      if (error) throw error;
-      return data as any;
-    },
-  });
-
-  const { data: fundingSummary } = useQuery({
-    queryKey: ["trip-funding-summary", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trip_funding_summary").select("*").eq("trip_id", tripId).maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tripId,
-  });
-
-  const { data: memberFunding = [], isLoading } = useQuery({
-    queryKey: ["member-funding", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trip_member_funding").select("*").eq("trip_id", tripId);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tripId,
-  });
 
   const { data: paymentHistory = [] } = useQuery({
     queryKey: ["payment-history", tripId, user?.id],
@@ -75,6 +45,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
     },
     enabled: !!tripId && !!user?.id,
   });
+
   const { data: myPaymentRecord } = useQuery({
     queryKey: ["my-payment", tripId, user?.id],
     queryFn: async () => {
@@ -85,18 +56,20 @@ const FundTab = ({ tripId }: FundTabProps) => {
     enabled: !!tripId && !!user?.id,
   });
 
-  const myFunding = memberFunding.find((m) => m.user_id === user?.id);
+  if (isLoading || !dashboard) {
+    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
 
-  const totalCost = Number(fundingSummary?.total_cost) || 0;
-  const perPersonCost = Number(myFunding?.per_person_cost) || (totalCost / Math.max(memberFunding.length, 1));
-  const totalFunded = Number(fundingSummary?.total_funded) || 0;
-  const pctFunded = Number(fundingSummary?.percent_funded) || 0;
-
-  const deadlineDays = fundingSummary?.days_to_deadline ?? null;
-
-  const myPaid = Number(myFunding?.amount_paid) || 0;
-  const myRemaining = Math.max(0, Number(myFunding?.amount_remaining) || (perPersonCost - myPaid));
-  const myStatus = myFunding?.member_status || computeMemberStatus(myPaid, perPersonCost, deadlineDays);
+  const cu = dashboard.current_user;
+  const isOrganizer = cu?.role === "organizer";
+  const totalCost = dashboard.total_cost;
+  const perPersonCost = cu?.share || dashboard.per_person_cost;
+  const totalFunded = dashboard.funded_total;
+  const pctFunded = Math.round(dashboard.funded_percent * 100);
+  const deadlineDays = dashboard.days_to_deadline;
+  const myPaid = cu?.paid || 0;
+  const myRemaining = cu?.owe || 0;
+  const myStatus = cu?.status || "On Track";
 
   // Payment plan
   const planType = myPaymentRecord?.installment_plan || "monthly";
@@ -137,7 +110,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payments", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["my-payment", tripId] });
       toast({ title: "Plan updated" });
     },
   });
@@ -189,19 +162,14 @@ const FundTab = ({ tripId }: FundTabProps) => {
     }
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-  }
-
-  // Trip health from server-computed statuses
-  const lateCount = memberFunding.filter(m => m.member_status === "Behind").length;
-  const onTrackCount = memberFunding.filter(m => m.member_status === "Paid" || m.member_status === "On Track").length;
-  const pctOnTrack = memberFunding.length > 0 ? (onTrackCount / memberFunding.length) * 100 : 100;
-  const health = computeTripHealth(pctFunded, pctOnTrack, deadlineDays, lateCount, memberFunding.length);
+  // Member counts for status
+  const paidCount = dashboard.members.filter(m => m.status === "Paid").length;
+  const onTrackCount = dashboard.members.filter(m => m.status === "On Track").length;
+  const behindCount = dashboard.members.filter(m => m.status === "Behind").length;
 
   return (
     <div className="space-y-6">
-      {/* Organizer: Edit Trip Total (top-level) */}
+      {/* Organizer: Edit Trip Total */}
       {isOrganizer && (
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 space-y-2">
@@ -224,10 +192,8 @@ const FundTab = ({ tripId }: FundTabProps) => {
                   <Button size="sm" className="h-8 rounded-xl" onClick={async () => {
                     const val = Number(newTotalCost);
                     if (isNaN(val) || val < 0) return;
-                    await supabase.from("trips").update({ total_cost: val } as any).eq("id", tripId);
-                    queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-                    queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
-                    queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+                    await supabase.rpc("update_trip_total", { p_trip_id: tripId, p_total: val });
+                    refresh();
                     setEditingTotal(false);
                     toast({ title: "Trip total updated" });
                   }}>
@@ -271,13 +237,18 @@ const FundTab = ({ tripId }: FundTabProps) => {
                 <p className="text-[10px] text-muted-foreground">You Still Owe</p>
               </div>
             )}
-            {trip?.payment_deadline && (
+            {dashboard.payment_deadline && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                Deadline: {format(new Date(trip.payment_deadline), "MMM d, yyyy")}
+                Deadline: {format(new Date(dashboard.payment_deadline), "MMM d, yyyy")}
                 {deadlineDays !== null && deadlineDays > 0 && <span>· {deadlineDays} days left</span>}
               </div>
             )}
+            {/* Payment method on file */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ShieldCheck className="h-3 w-3" />
+              Payment method: {cu?.has_payment_method ? "On file ✓" : "Not on file"}
+            </div>
             {myRemaining > 0 && (
               <div className="flex items-start gap-2 bg-muted/30 rounded-xl p-2.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -341,38 +312,36 @@ const FundTab = ({ tripId }: FundTabProps) => {
             {isOrganizer && (
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>${totalFunded.toLocaleString()} funded</span>
-                <span>${Math.max(0, totalCost - totalFunded).toLocaleString()} remaining</span>
+                <span>${dashboard.remaining_total.toLocaleString()} remaining</span>
               </div>
             )}
           </CardContent>
         </Card>
-
 
         {/* Trip Health */}
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Trip Health</p>
-              <p className="text-xs text-muted-foreground">{health.score}% — {health.status}</p>
+              <p className="text-xs text-muted-foreground">{dashboard.health_score}% — {dashboard.health_label}</p>
             </div>
             <Badge className={`text-[10px] border-0 ${
-              health.status === "Healthy" ? "bg-accent/20 text-accent" :
-              health.status === "At Risk" ? "bg-yellow-100 text-yellow-700" :
-              health.status === "Needs Action" ? "bg-orange-100 text-orange-700" :
+              dashboard.health_label === "Healthy" ? "bg-accent/20 text-accent" :
+              dashboard.health_label === "At Risk" ? "bg-yellow-100 text-yellow-700" :
+              dashboard.health_label === "Needs Action" ? "bg-orange-100 text-orange-700" :
               "bg-destructive/10 text-destructive"
-            }`}>{health.status}</Badge>
+            }`}>{dashboard.health_label}</Badge>
           </CardContent>
         </Card>
 
-        {/* Member Status (badges only, no dollar amounts) */}
+        {/* Member Status */}
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center gap-2 mb-1">
               <Users className="h-4 w-4 text-primary" />
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Member Status</p>
             </div>
-            {memberFunding.map((m) => {
-              const status = m.member_status || "Unknown";
+            {dashboard.members.map((m) => {
               const isMe = m.user_id === user?.id;
               return (
                 <div key={m.user_id} className="flex items-center justify-between py-1.5">
@@ -380,10 +349,10 @@ const FundTab = ({ tripId }: FundTabProps) => {
                     {m.display_name || "Unknown"} {isMe && <span className="text-primary text-xs">(You)</span>}
                   </p>
                   <Badge className={`text-[10px] border-0 ${
-                    status === "Paid" ? "bg-accent/20 text-accent" :
-                    status === "On Track" ? "bg-secondary text-secondary-foreground" :
+                    m.status === "Paid" ? "bg-accent/20 text-accent" :
+                    m.status === "On Track" ? "bg-secondary text-secondary-foreground" :
                     "bg-destructive/10 text-destructive"
-                  }`}>{status}</Badge>
+                  }`}>{m.status}</Badge>
                 </div>
               );
             })}

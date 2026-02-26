@@ -8,7 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useTripRole } from "@/hooks/useTripRole";
+import { useTripDashboard } from "@/hooks/useTripDashboard";
 import { motion } from "framer-motion";
 import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -40,7 +40,7 @@ const BOOKING_CATEGORIES = [
 
 const PlanTab = ({ tripId }: PlanTabProps) => {
   const { user } = useAuth();
-  const { isOrganizer } = useTripRole(tripId);
+  const { dashboard, refresh } = useTripDashboard(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [hostControlsOpen, setHostControlsOpen] = useState(false);
@@ -52,29 +52,12 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
   const [newActivity, setNewActivity] = useState("");
   const [newDay, setNewDay] = useState(1);
   const [newTime, setNewTime] = useState("");
-
-  const { data: trip } = useQuery({
-    queryKey: ["trip", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
-      if (error) throw error;
-      return data as any;
-    },
-  });
+  const [shareOverrides, setShareOverrides] = useState<Record<string, string>>({});
 
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ["bookings", tripId],
     queryFn: async () => {
       const { data, error } = await supabase.from("bookings").select("*").eq("trip_id", tripId).order("created_at");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: fundingSummary } = useQuery({
-    queryKey: ["trip-funding-summary", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trip_funding_summary").select("*").eq("trip_id", tripId).maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -89,25 +72,11 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
   });
 
-  const { data: memberPayments = [] } = useQuery({
-    queryKey: ["host-member-payments", tripId],
-    queryFn: async () => {
-      const { data: members } = await supabase.from("trip_members").select("*").eq("trip_id", tripId);
-      if (!members) return [];
-      const userIds = members.map(m => m.user_id);
-      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
-      const { data: payments } = await supabase.from("payments").select("*").eq("trip_id", tripId);
-      return members.map(m => ({
-        ...m,
-        displayName: profiles?.find(p => p.user_id === m.user_id)?.display_name || "Unknown",
-        payment: payments?.find(p => p.user_id === m.user_id),
-      }));
-    },
-    enabled: isOrganizer,
-  });
+  if (!dashboard) return null;
 
-  const pctFunded = Number(fundingSummary?.percent_funded) || 0;
-  const isFullyFunded = pctFunded >= 100;
+  const isOrganizer = dashboard.current_user?.role === "organizer";
+  const pctFunded = Math.round(dashboard.funded_percent * 100);
+  const isFullyFunded = dashboard.funded_percent >= 1;
 
   // Mutations
   const addBooking = useMutation({
@@ -119,13 +88,10 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         price, notes: newBooking.notes || null, created_by: user.id,
       });
       if (error) throw error;
-      // Trigger handles total_cost update automatically
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+      refresh();
       setNewBooking({ title: "", price: "", category: "flights", notes: "" });
       toast({ title: "Booking added" });
     },
@@ -135,13 +101,10 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     mutationFn: async (booking: { id: string; price: number | null }) => {
       const { error } = await supabase.from("bookings").delete().eq("id", booking.id);
       if (error) throw error;
-      // Trigger handles total_cost update automatically
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+      refresh();
       toast({ title: "Booking removed" });
     },
   });
@@ -152,8 +115,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       await supabase.from("payments").delete().match({ trip_id: tripId, user_id: userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["host-member-payments", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
+      refresh();
       toast({ title: "Member removed" });
     },
   });
@@ -173,9 +135,9 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
   const updateDeadline = useMutation({
     mutationFn: async () => {
       if (!newDeadline) return;
-      await supabase.from("trips").update({ payment_deadline: newDeadline } as any).eq("id", tripId);
+      await supabase.from("trips").update({ payment_deadline: newDeadline }).eq("id", tripId);
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["trip", tripId] }); toast({ title: "Deadline updated" }); },
+    onSuccess: () => { refresh(); toast({ title: "Deadline updated" }); },
   });
 
   const addItem = useMutation({
@@ -215,6 +177,21 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
   });
 
+  const handleSetShareOverride = async (userId: string) => {
+    const val = Number(shareOverrides[userId]);
+    if (isNaN(val) || val < 0) return;
+    const { error } = await supabase.rpc("set_member_share_override", {
+      p_trip_id: tripId, p_user_id: userId, p_amount: val,
+    });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Share override set" });
+      refresh();
+      setShareOverrides(prev => { const next = { ...prev }; delete next[userId]; return next; });
+    }
+  };
+
   if (bookingsLoading || itineraryLoading) {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -242,7 +219,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
             <div className="flex-1">
               <p className="text-sm font-medium">Bookings unlock at 100% funded</p>
               <Progress value={pctFunded} className="h-1.5 mt-1.5 rounded-full" />
-              <p className="text-[10px] text-muted-foreground mt-1">{Math.round(pctFunded)}% funded</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{pctFunded}% funded</p>
             </div>
           </CardContent>
         </Card>
@@ -257,7 +234,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 <div className="flex items-center gap-2">
                   <Crown className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Host Controls</span>
-                  <Badge variant="secondary" className="text-[10px]">{memberPayments.length} members</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{dashboard.members.length} members</Badge>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${hostControlsOpen ? "rotate-180" : ""}`} />
               </CardContent>
@@ -265,26 +242,42 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 mt-3">
-              {/* Members */}
+              {/* Members with share overrides */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Members</p>
-                  {memberPayments.map(m => {
-                    const pct = m.payment && Number(m.payment.amount) > 0
-                      ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100) : 0;
+                  {dashboard.members.map(m => {
+                    const pct = m.share > 0 ? Math.round((m.paid / m.share) * 100) : 0;
                     return (
-                      <div key={m.id} className="flex items-center justify-between py-1.5">
-                        <div>
-                          <p className="text-sm font-medium">{m.displayName}</p>
-                          <p className="text-[10px] text-muted-foreground">{pct}% funded</p>
+                      <div key={m.user_id} className="space-y-1">
+                        <div className="flex items-center justify-between py-1.5">
+                          <div>
+                            <p className="text-sm font-medium">{m.display_name || "Unknown"}</p>
+                            <p className="text-[10px] text-muted-foreground">{pct}% funded · ${m.paid.toLocaleString()} / ${m.share.toLocaleString()}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Progress value={pct} className="h-1.5 w-16" />
+                            {m.user_id !== user?.id && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeMember.mutate(m.user_id)}>
+                                <UserMinus className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Progress value={pct} className="h-1.5 w-16" />
-                          {m.user_id !== user?.id && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeMember.mutate(m.user_id)}>
-                              <UserMinus className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          )}
+                        {/* Share override input */}
+                        <div className="flex items-center gap-2 pl-2">
+                          <Input
+                            type="number" min="0" placeholder={`Share: $${m.share}`}
+                            value={shareOverrides[m.user_id] || ""}
+                            onChange={e => setShareOverrides(prev => ({ ...prev, [m.user_id]: e.target.value }))}
+                            className="rounded-xl text-xs h-7 w-28"
+                          />
+                          <Button size="sm" variant="outline" className="h-7 rounded-xl text-[10px]"
+                            onClick={() => handleSetShareOverride(m.user_id)}
+                            disabled={!shareOverrides[m.user_id]}
+                          >
+                            Set Share
+                          </Button>
                         </div>
                       </div>
                     );

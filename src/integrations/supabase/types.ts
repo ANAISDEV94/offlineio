@@ -152,6 +152,48 @@ export type Database = {
           },
         ]
       }
+      member_share_overrides: {
+        Row: {
+          created_at: string
+          id: string
+          set_by: string
+          share_amount: number
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          set_by: string
+          share_amount: number
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          set_by?: string
+          share_amount?: number
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_share_overrides_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "member_share_overrides_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -672,6 +714,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_trip_dashboard: { Args: { p_trip_id: string }; Returns: Json }
       get_trip_funding_summary: {
         Args: { p_trip_id: string }
         Returns: {
@@ -696,6 +739,14 @@ export type Database = {
         Returns: boolean
       }
       recalc_trip_total: { Args: { p_trip_id: string }; Returns: number }
+      set_member_share_override: {
+        Args: { p_amount: number; p_trip_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      update_trip_total: {
+        Args: { p_total: number; p_trip_id: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
