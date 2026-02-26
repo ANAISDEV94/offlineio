@@ -110,10 +110,13 @@ serve(async (req) => {
       return _json({ error: "Failed to check funding status" }, 500);
     }
 
+    const perPersonCost = Number(funding?.per_person_cost ?? 0);
     const remainingDollars = Number(funding?.amount_remaining ?? 0);
     const remainingCents = Math.round(remainingDollars * 100);
+    console.log("[create-checkout] perPersonCost:", perPersonCost, "remainingCents:", remainingCents);
 
-    if (amount_cents > remainingCents) {
+    // Only enforce the cap when a per-person cost has been set (total_cost > 0)
+    if (perPersonCost > 0 && amount_cents > remainingCents) {
       return _json(
         { error: `Amount exceeds remaining balance. You owe $${remainingDollars.toFixed(2)}.` },
         400,
