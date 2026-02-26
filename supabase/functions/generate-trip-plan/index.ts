@@ -84,7 +84,12 @@ Trip details:
 - Vibe: ${trip.vibe}
 
 User preferences:
-${JSON.stringify(answers_json, null, 2)}
+- Accommodation style: ${answers_json.accommodation || "Not specified"}
+- Activity interests: ${Array.isArray(answers_json.activities) ? answers_json.activities.join(", ") : "Not specified"}
+- Trip pace: ${answers_json.pace || "Not specified"}
+- Dietary needs / food preferences: ${answers_json.dietaryNeeds || "None specified"}
+- Must-see / must-do: ${answers_json.mustSee || "None specified"}
+- Special requests: ${answers_json.specialRequests || "None"}
 
 IMPORTANT RULES:
 - The budget_breakdown amounts MUST sum to exactly $${totalBudget}

@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Sparkles, Loader2, RefreshCw, Pencil, Save, ExternalLink } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw, Pencil, Save, ExternalLink, Send, SkipForward } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -24,6 +22,8 @@ interface Answers {
   accommodation: string;
   activities: string[];
   pace: string;
+  dietaryNeeds: string;
+  mustSee: string;
   specialRequests: string;
 }
 
@@ -33,29 +33,105 @@ interface GeneratedPlan {
   suggested_options: { category: string; title: string; description: string; est_cost_low: number; est_cost_high: number; search_url: string }[];
 }
 
-const ACCOMMODATION_OPTIONS = ["Budget", "Mid-range", "Luxury", "Unique stays"];
-const ACTIVITY_OPTIONS = ["Adventure", "Culture", "Food", "Relaxation", "Nightlife"];
-const PACE_OPTIONS = ["Packed schedule", "Balanced", "Relaxed"];
+interface ChatMessage {
+  role: "ai" | "user";
+  content: string;
+  questionIndex: number;
+  options?: string[];
+  multiSelect?: boolean;
+}
+
+const QUESTIONS: { text: string; key: keyof Answers; options?: string[]; multiSelect?: boolean }[] = [
+  { text: "What kind of stay are you feeling?", key: "accommodation", options: ["Budget", "Mid-range", "Luxury", "Unique stays"] },
+  { text: "What do you want to do there?", key: "activities", options: ["Adventure", "Culture", "Food", "Relaxation", "Nightlife"], multiSelect: true },
+  { text: "How packed should your days be?", key: "pace", options: ["Packed schedule", "Balanced", "Relaxed"] },
+  { text: "Any food preferences or dietary needs?", key: "dietaryNeeds" },
+  { text: "Anything you absolutely must do or see?", key: "mustSee" },
+  { text: "Any other special requests?", key: "specialRequests" },
+];
 
 const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerProps) => {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>("questions");
   const [answers, setAnswers] = useState<Answers>({
-    accommodation: "Mid-range",
+    accommodation: "",
     activities: [],
-    pace: "Balanced",
+    pace: "",
+    dietaryNeeds: "",
+    mustSee: "",
     specialRequests: "",
   });
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [saving, setSaving] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [multiSelectPending, setMultiSelectPending] = useState<string[]>([]);
+  const [textInput, setTextInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const toggleActivity = (activity: string) => {
-    setAnswers(prev => ({
-      ...prev,
-      activities: prev.activities.includes(activity)
-        ? prev.activities.filter(a => a !== activity)
-        : [...prev.activities, activity],
-    }));
+  // Initialize first question
+  useEffect(() => {
+    if (open && chatMessages.length === 0) {
+      setChatMessages([{ role: "ai", content: QUESTIONS[0].text, questionIndex: 0, options: QUESTIONS[0].options, multiSelect: QUESTIONS[0].multiSelect }]);
+    }
+  }, [open]);
+
+  // Auto-scroll
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, currentQuestion]);
+
+  const advanceToNext = (answerText: string, nextIndex: number) => {
+    setChatMessages(prev => [...prev, { role: "user", content: answerText, questionIndex: currentQuestion }]);
+
+    if (nextIndex < QUESTIONS.length) {
+      setTimeout(() => {
+        const q = QUESTIONS[nextIndex];
+        setChatMessages(prev => [...prev, { role: "ai", content: q.text, questionIndex: nextIndex, options: q.options, multiSelect: q.multiSelect }]);
+        setCurrentQuestion(nextIndex);
+      }, 400);
+    } else {
+      setCurrentQuestion(nextIndex);
+    }
+  };
+
+  const handleSingleSelect = (option: string) => {
+    const q = QUESTIONS[currentQuestion];
+    setAnswers(prev => ({ ...prev, [q.key]: option }));
+    advanceToNext(option, currentQuestion + 1);
+  };
+
+  const toggleMultiOption = (option: string) => {
+    setMultiSelectPending(prev => prev.includes(option) ? prev.filter(o => o !== option) : [...prev, option]);
+  };
+
+  const confirmMultiSelect = () => {
+    if (multiSelectPending.length === 0) return;
+    const q = QUESTIONS[currentQuestion];
+    setAnswers(prev => ({ ...prev, [q.key]: multiSelectPending }));
+    advanceToNext(multiSelectPending.join(", "), currentQuestion + 1);
+    setMultiSelectPending([]);
+  };
+
+  const handleTextSubmit = () => {
+    const q = QUESTIONS[currentQuestion];
+    const val = textInput.trim();
+    setAnswers(prev => ({ ...prev, [q.key]: val }));
+    advanceToNext(val || "Skipped", currentQuestion + 1);
+    setTextInput("");
+  };
+
+  const handleSkip = () => {
+    advanceToNext("Skipped", currentQuestion + 1);
+    setTextInput("");
+  };
+
+  const resetWizard = () => {
+    setCurrentQuestion(0);
+    setChatMessages([{ role: "ai", content: QUESTIONS[0].text, questionIndex: 0, options: QUESTIONS[0].options, multiSelect: QUESTIONS[0].multiSelect }]);
+    setMultiSelectPending([]);
+    setTextInput("");
+    setAnswers({ accommodation: "", activities: [], pace: "", dietaryNeeds: "", mustSee: "", specialRequests: "" });
   };
 
   const generate = async () => {
@@ -69,7 +145,6 @@ const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerPro
       setPlan(data);
       setStep("preview");
     } catch (e: any) {
-      console.error("Generate error:", e);
       toast({ title: "Generation failed", description: e.message || "Try again", variant: "destructive" });
       setStep("questions");
     }
@@ -89,6 +164,7 @@ const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerPro
       onOpenChange(false);
       setStep("questions");
       setPlan(null);
+      resetWizard();
     } catch (e: any) {
       toast({ title: "Save failed", description: e.message, variant: "destructive" });
     } finally {
@@ -97,6 +173,8 @@ const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerPro
   };
 
   const budgetTotal = plan?.budget_breakdown?.reduce((s, b) => s + b.amount, 0) || 0;
+  const isComplete = currentQuestion >= QUESTIONS.length;
+  const activeQ = currentQuestion < QUESTIONS.length ? QUESTIONS[currentQuestion] : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -108,79 +186,113 @@ const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerPro
           </SheetTitle>
         </SheetHeader>
 
+        {/* Progress dots */}
+        {step === "questions" && (
+          <div className="flex justify-center gap-1.5 mt-3">
+            {QUESTIONS.map((_, i) => (
+              <div key={i} className={`h-1.5 w-1.5 rounded-full transition-colors ${i <= currentQuestion ? "bg-primary" : "bg-muted"}`} />
+            ))}
+          </div>
+        )}
+
         <div className="mt-4 space-y-6">
-          {/* Step 1: Questions */}
+          {/* Step 1: Chat wizard */}
           {step === "questions" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-              {/* Accommodation */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Accommodation Style</Label>
-                <div className="flex flex-wrap gap-2">
-                  {ACCOMMODATION_OPTIONS.map(opt => (
-                    <Button
-                      key={opt}
-                      variant={answers.accommodation === opt ? "default" : "outline"}
-                      size="sm"
-                      className="rounded-full text-xs"
-                      onClick={() => setAnswers(p => ({ ...p, accommodation: opt }))}
-                    >
-                      {opt}
-                    </Button>
-                  ))}
-                </div>
+            <div className="space-y-3">
+              {/* Chat messages */}
+              <div className="space-y-3 min-h-[200px]">
+                {chatMessages.map((msg, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                      msg.role === "ai"
+                        ? "bg-muted text-foreground"
+                        : "bg-primary text-primary-foreground"
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </motion.div>
+                ))}
+                <div ref={scrollRef} />
               </div>
 
-              {/* Activities */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Activity Interests (select multiple)</Label>
-                <div className="flex flex-wrap gap-3">
-                  {ACTIVITY_OPTIONS.map(opt => (
-                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={answers.activities.includes(opt)}
-                        onCheckedChange={() => toggleActivity(opt)}
+              {/* Active input area */}
+              {!isComplete && activeQ && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 pt-2">
+                  {/* Pill options */}
+                  {activeQ.options && !activeQ.multiSelect && (
+                    <div className="flex flex-wrap gap-2">
+                      {activeQ.options.map(opt => (
+                        <Button key={opt} variant="outline" size="sm" className="rounded-full text-xs" onClick={() => handleSingleSelect(opt)}>
+                          {opt}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Multi-select pills */}
+                  {activeQ.options && activeQ.multiSelect && (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {activeQ.options.map(opt => (
+                          <Button
+                            key={opt}
+                            variant={multiSelectPending.includes(opt) ? "default" : "outline"}
+                            size="sm"
+                            className="rounded-full text-xs"
+                            onClick={() => toggleMultiOption(opt)}
+                          >
+                            {opt}
+                          </Button>
+                        ))}
+                      </div>
+                      {multiSelectPending.length > 0 && (
+                        <Button size="sm" className="rounded-full text-xs" onClick={confirmMultiSelect}>
+                          Next →
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Free text input */}
+                  {!activeQ.options && (
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        placeholder="Type your answer..."
+                        value={textInput}
+                        onChange={e => setTextInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleTextSubmit()}
+                        className="rounded-full text-sm"
                       />
-                      <span className="text-sm">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+                      <Button size="icon" className="rounded-full shrink-0 h-9 w-9" onClick={handleTextSubmit} disabled={!textInput.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0" onClick={handleSkip}>
+                        <SkipForward className="h-3 w-3 mr-1" /> Skip
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
 
-              {/* Pace */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Trip Pace</Label>
-                <div className="flex flex-wrap gap-2">
-                  {PACE_OPTIONS.map(opt => (
-                    <Button
-                      key={opt}
-                      variant={answers.pace === opt ? "default" : "outline"}
-                      size="sm"
-                      className="rounded-full text-xs"
-                      onClick={() => setAnswers(p => ({ ...p, pace: opt }))}
-                    >
-                      {opt}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Special Requests */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Special Requests (optional)</Label>
-                <Textarea
-                  placeholder="Dietary needs, accessibility, must-see spots..."
-                  value={answers.specialRequests}
-                  onChange={e => setAnswers(p => ({ ...p, specialRequests: e.target.value }))}
-                  className="rounded-xl"
-                  rows={3}
-                />
-              </div>
-
-              <Button className="w-full rounded-xl" onClick={generate} disabled={answers.activities.length === 0}>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate My Plan
-              </Button>
-            </motion.div>
+              {/* Generate button */}
+              {isComplete && (
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                  <Button className="w-full rounded-xl" onClick={generate}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate My Plan
+                  </Button>
+                  <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-muted-foreground" onClick={resetWizard}>
+                    <Pencil className="h-3 w-3 mr-1" /> Start over
+                  </Button>
+                </motion.div>
+              )}
+            </div>
           )}
 
           {/* Step 2: Generating */}
@@ -278,7 +390,7 @@ const AiTripPlanner = ({ tripId, open, onOpenChange, onSaved }: AiTripPlannerPro
                 <Button variant="outline" size="icon" className="rounded-xl" onClick={generate}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="rounded-xl" onClick={() => setStep("questions")}>
+                <Button variant="outline" size="icon" className="rounded-xl" onClick={() => { setStep("questions"); resetWizard(); }}>
                   <Pencil className="h-4 w-4" />
                 </Button>
               </div>
