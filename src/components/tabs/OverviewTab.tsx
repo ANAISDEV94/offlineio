@@ -168,7 +168,7 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
             <span className="font-semibold text-primary">{pctFundedDisplay}%</span>
           </div>
           <Progress value={pctFundedDisplay} className="h-2 rounded-full" />
-
+          <p className="text-[10px] text-muted-foreground">Unlocks planning and booking checklist at 100% funded.</p>
           {/* Member-by-member payment status */}
           <div className="space-y-1.5 pt-1">
             {dashboard.members.map((m) => {
