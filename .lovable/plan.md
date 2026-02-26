@@ -1,15 +1,39 @@
 
-# Clean Up Test Data for Trip
 
-## What
-Delete the existing test bookings (4 rows) and itinerary items (1 row) from trip `0683c76d-e390-4caf-b2ad-86556895f425` so the Plan tab renders empty -- showing only the Trip Planner card until a plan is generated.
+# Fix Payment Tracking After Stripe Checkout
 
-## Steps
+## Problem
+After a successful Stripe checkout, the app redirects back but payments aren't recorded. Two issues cause this:
 
-1. **Delete all rows from `bookings`** where `trip_id = '0683c76d-...'` (4 rows)
-2. **Delete all rows from `itinerary_items`** where `trip_id = '0683c76d-...'` (1 row)
+1. **Webhook crash**: The `stripe-webhook` function uses `stripe.webhooks.constructEvent()` (synchronous), but Deno requires the async version `constructEventAsync()`. Every webhook call fails with "SubtleCryptoProvider cannot be used in a synchronous context", so `payment_history` is never written and `payments.amount_paid` is never updated.
 
-No code changes needed -- the conditional rendering logic already hides these sections when no data exists.
+2. **No post-payment refresh**: When Stripe redirects back to `/trip/{id}?payment=success`, the app doesn't detect the query parameter, show a confirmation, or refresh the dashboard data.
 
-## Technical Detail
-These are data deletions using the database insert/update/delete tool (not a migration). The `recalc_trip_total` trigger will automatically set `trips.total_cost` to 0 after the bookings are removed.
+## Plan
+
+### 1. Fix the webhook (stripe-webhook/index.ts)
+- Replace `stripe.webhooks.constructEvent(body, signature, webhookSecret)` with `await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)`
+- This is the only change needed -- the rest of the webhook logic (insert into `payment_history`, update `payments.amount_paid`) is already correct
+
+### 2. Add post-payment detection (TripDashboard.tsx)
+- Read `?payment=success` from the URL on mount
+- Show a success toast confirming the payment went through
+- Force-refresh the dashboard query so updated amounts appear immediately
+- Clean the query param from the URL so refreshing doesn't re-trigger the toast
+- Also switch to the "fund" tab automatically so the user sees their updated balance
+
+### 3. Deploy and verify
+- Deploy the updated `stripe-webhook` function
+- Confirm the webhook processes successfully in logs
+
+## Technical Details
+
+**File changes:**
+
+| File | Change |
+|------|--------|
+| `supabase/functions/stripe-webhook/index.ts` | Line 45: `constructEvent` to `await constructEventAsync` |
+| `src/pages/TripDashboard.tsx` | Add `useEffect` + `useSearchParams` to detect `?payment=success`, show toast, refresh dashboard, switch to fund tab |
+
+No database or migration changes needed -- the schema already supports everything. The webhook was just failing silently.
+
