@@ -283,6 +283,44 @@ export type Database = {
           },
         ]
       }
+      payment_history: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          status: string
+          stripe_session_id: string | null
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_session_id?: string | null
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_history_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -417,6 +455,7 @@ export type Database = {
           payment_deadline: string | null
           per_person_budget: number
           start_date: string
+          total_cost: number
           trip_description: string | null
           updated_at: string
           vibe: string
@@ -440,6 +479,7 @@ export type Database = {
           payment_deadline?: string | null
           per_person_budget?: number
           start_date: string
+          total_cost?: number
           trip_description?: string | null
           updated_at?: string
           vibe?: string
@@ -463,6 +503,7 @@ export type Database = {
           payment_deadline?: string | null
           per_person_budget?: number
           start_date?: string
+          total_cost?: number
           trip_description?: string | null
           updated_at?: string
           vibe?: string

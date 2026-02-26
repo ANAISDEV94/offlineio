@@ -66,6 +66,17 @@ serve(async (req) => {
             .eq("trip_id", tripId)
             .eq("user_id", userId);
 
+          // Insert into payment_history
+          await supabaseAdmin
+            .from("payment_history")
+            .insert({
+              trip_id: tripId,
+              user_id: userId,
+              amount: paymentAmount,
+              status: "paid",
+              stripe_session_id: session.id,
+            });
+
           console.log(`Payment updated: user=${userId} trip=${tripId} amount=${paymentAmount} total=${newAmountPaid}`);
         }
       }
