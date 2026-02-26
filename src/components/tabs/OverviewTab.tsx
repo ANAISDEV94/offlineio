@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Shield, LogOut, Settings, Pencil, Check, X, Bell } from "lucide-react";
+import { Pencil, Check, X, Bell, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import TripDetailsCard from "@/components/overview/TripDetailsCard";
 import InviteCodeCard from "@/components/overview/InviteCodeCard";
@@ -30,8 +30,8 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [replanOpen, setReplanOpen] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [newDisplayName, setNewDisplayName] = useState("");
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [newTotalCost, setNewTotalCost] = useState("");
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
@@ -86,20 +86,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       return data;
     },
     enabled: !!user?.id,
-  });
-
-  const updateDisplayName = useMutation({
-    mutationFn: async () => {
-      if (!newDisplayName.trim() || !user) return;
-      const { error } = await supabase.from("profiles").update({ display_name: newDisplayName.trim() }).eq("user_id", user.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["my-profile", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
-      setEditingName(false);
-      toast({ title: "Name updated" });
-    },
   });
 
   if (!trip) return null;
@@ -189,7 +175,51 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
         status={myStatus as "Behind" | "On Track" | "Paid"}
       />
 
-      {/* 3. Group Status */}
+      {/* 3. Organizer: Edit Trip Total */}
+      {isOrganizer && (
+        <Card className="rounded-2xl border-0 shadow-sm glass-card">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-primary" /> Trip Total
+              </p>
+              {!editingTotal ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">${totalCost.toLocaleString()}</span>
+                  <button onClick={() => { setEditingTotal(true); setNewTotalCost(totalCost.toString()); }}>
+                    <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="0" value={newTotalCost}
+                    onChange={e => setNewTotalCost(e.target.value)}
+                    className="rounded-xl text-sm h-8 w-28"
+                  />
+                  <Button size="sm" className="h-8 rounded-xl" onClick={async () => {
+                    const val = Number(newTotalCost);
+                    if (isNaN(val) || val < 0) return;
+                    await supabase.from("trips").update({ total_cost: val } as any).eq("id", tripId);
+                    queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+                    queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+                    queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+                    setEditingTotal(false);
+                    toast({ title: "Trip total updated" });
+                  }}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 rounded-xl" onClick={() => setEditingTotal(false)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Group Status with Member Payment List */}
       <Card className="rounded-2xl border-0 shadow-sm glass-card">
         <CardContent className="p-4 space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Group Funding</p>
@@ -198,10 +228,32 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
             <span className="font-semibold text-primary">{pctFunded}%</span>
           </div>
           <Progress value={pctFunded} className="h-2 rounded-full" />
-          <div className="flex gap-3 text-xs text-muted-foreground">
-            <span>{memberFunding.filter(m => m.member_status === "Paid").length} Paid</span>
-            <span>{memberFunding.filter(m => m.member_status === "On Track").length} On Track</span>
-            <span>{lateCount} Behind</span>
+
+          {/* Member-by-member payment status */}
+          <div className="space-y-1.5 pt-1">
+            {memberFunding.map((m) => {
+              const status = m.member_status || "Unknown";
+              const isMe = m.user_id === user?.id;
+              return (
+                <div key={m.user_id} className="flex items-center justify-between py-1.5">
+                  <p className="text-sm font-medium truncate">
+                    {m.display_name || "Unknown"} {isMe && <span className="text-primary text-xs">(You)</span>}
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isOrganizer && (
+                      <span className="text-[10px] text-muted-foreground">
+                        ${Number(m.amount_paid || 0).toLocaleString()} / ${Number(m.per_person_cost || 0).toLocaleString()}
+                      </span>
+                    )}
+                    <Badge className={`text-[10px] border-0 ${
+                      status === "Paid" ? "bg-accent/20 text-accent" :
+                      status === "On Track" ? "bg-secondary text-secondary-foreground" :
+                      "bg-destructive/10 text-destructive"
+                    }`}>{status}</Badge>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -244,42 +296,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       {/* 6. System Rules */}
       <SystemRulesCard />
 
-      {/* 7. Settings */}
-      <Card className="rounded-2xl border-0 bg-card shadow-sm">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-            <Settings className="h-3.5 w-3.5 text-primary" /> Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Display Name</p>
-              {editingName ? (
-                <div className="flex gap-2 mt-1">
-                  <Input value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)} className="rounded-xl text-sm h-8 w-40" />
-                  <Button size="sm" className="h-8 rounded-xl" onClick={() => updateDisplayName.mutate()}>
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8 rounded-xl" onClick={() => setEditingName(false)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">{myProfile?.display_name || "Not set"}</p>
-              )}
-            </div>
-            {!editingName && (
-              <button onClick={() => { setEditingName(true); setNewDisplayName(myProfile?.display_name || ""); }}>
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-              </button>
-            )}
-          </div>
-          <Button variant="outline" className="w-full rounded-xl gap-2" onClick={signOut}>
-            <LogOut className="h-3.5 w-3.5" /> Sign Out
-          </Button>
-        </CardContent>
-      </Card>
 
       <ReplanChat open={replanOpen} onOpenChange={setReplanOpen} tripContext={{
         destination: trip.destination, startDate: trip.start_date, endDate: trip.end_date,

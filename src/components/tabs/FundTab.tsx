@@ -201,6 +201,48 @@ const FundTab = ({ tripId }: FundTabProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Organizer: Edit Trip Total (top-level) */}
+      {isOrganizer && (
+        <Card className="border-0 shadow-sm glass-card">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trip Total</p>
+              {!editingTotal ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">${totalCost.toLocaleString()}</span>
+                  <button onClick={() => { setEditingTotal(true); setNewTotalCost(totalCost.toString()); }}>
+                    <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="0" value={newTotalCost}
+                    onChange={e => setNewTotalCost(e.target.value)}
+                    className="rounded-xl text-sm h-8 w-28"
+                  />
+                  <Button size="sm" className="h-8 rounded-xl" onClick={async () => {
+                    const val = Number(newTotalCost);
+                    if (isNaN(val) || val < 0) return;
+                    await supabase.from("trips").update({ total_cost: val } as any).eq("id", tripId);
+                    queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+                    queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+                    queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+                    setEditingTotal(false);
+                    toast({ title: "Trip total updated" });
+                  }}>
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 rounded-xl" onClick={() => setEditingTotal(false)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Section 1: Your Responsibility */}
       <div className="space-y-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Your Responsibility</p>
@@ -305,47 +347,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
           </CardContent>
         </Card>
 
-        {/* Organizer: Edit Trip Total */}
-        {isOrganizer && (
-          <Card className="border-0 shadow-sm glass-card">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trip Total</p>
-                {!editingTotal ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">${totalCost.toLocaleString()}</span>
-                    <button onClick={() => { setEditingTotal(true); setNewTotalCost(totalCost.toString()); }}>
-                      <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number" min="0" value={newTotalCost}
-                      onChange={e => setNewTotalCost(e.target.value)}
-                      className="rounded-xl text-sm h-8 w-28"
-                    />
-                    <Button size="sm" className="h-8 rounded-xl" onClick={async () => {
-                      const val = Number(newTotalCost);
-                      if (isNaN(val) || val < 0) return;
-                      await supabase.from("trips").update({ total_cost: val } as any).eq("id", tripId);
-                      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-                      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
-                      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
-                      setEditingTotal(false);
-                      toast({ title: "Trip total updated" });
-                    }}>
-                      <Check className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-8 rounded-xl" onClick={() => setEditingTotal(false)}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Trip Health */}
         <Card className="border-0 shadow-sm glass-card">

@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import FundTab from "@/components/tabs/FundTab";
 import PlanTab from "@/components/tabs/PlanTab";
-import HypeTab from "@/components/tabs/HypeTab";
+import SettingsTab from "@/components/tabs/SettingsTab";
 
 const TripDashboard = () => {
   const navigate = useNavigate();
@@ -183,14 +183,14 @@ const TripDashboard = () => {
           <TabsTrigger value="overview" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📊 Overview</TabsTrigger>
           <TabsTrigger value="fund" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
           <TabsTrigger value="plan" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
-          <TabsTrigger value="hype" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
+          <TabsTrigger value="settings" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">⚙️ Settings</TabsTrigger>
         </TabsList>
 
         <div className="mt-4 px-2">
           <TabsContent value="overview"><OverviewTab tripId={tripId!} /></TabsContent>
           <TabsContent value="fund"><FundTab tripId={tripId!} /></TabsContent>
           <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="settings"><SettingsTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>
     </div>
