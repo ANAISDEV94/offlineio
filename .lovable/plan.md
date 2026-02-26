@@ -1,276 +1,172 @@
 
-# Product Architecture Overhaul: Financial Coordination System
 
-## Summary
-Restructure the entire dashboard from a "group travel inspiration board" into a **structured group financial accountability platform**. This touches every tab, the role permission model, and the visual hierarchy.
+# Implement Core Trip Funding Math with Server-Side Computation
 
----
+## Problem
 
-## Phase 1: Role Permission Architecture (Prompt 1)
+The frontend currently computes per-person shares, funded totals, and member status using client-side arithmetic scattered across multiple components. The Plan tab manually increments/decrements `trips.total_cost` when bookings are added/removed, which is fragile and can drift. There is no automatic recalculation when members join/leave.
 
-### Current State
-- `trip_members.role` already stores `organizer` or `member`
-- `is_trip_organizer()` and `is_trip_member()` DB functions exist
-- Organizer actions are scattered inconsistently across tabs
+## What Already Exists (No Changes Needed)
 
-### Changes
+- **DB Views**: `trip_funding_summary` and `trip_member_funding` already compute `per_person_cost`, `total_funded`, `percent_funded`, `amount_remaining`, `member_status`, and `pct_complete` server-side from `trips.total_cost` and `payments.amount_paid`. These are well-structured and correct.
+- **Tables**: `trips` (has `total_cost`, `payment_deadline`), `trip_members`, `payments`, `payment_history`, `bookings` (has `price`, `category`), `budget_categories` all exist.
 
-**A. New shared hook: `src/hooks/useTripRole.ts`**
-- Returns `{ isOrganizer, isMember, role }` for the current user and trip
-- Single source of truth, replaces ad-hoc `isOrganizer` checks in OverviewTab, PlanTab, FundTab
+## Changes
 
-**B. Enforce role-gated UI consistently**
-- **Organizer-only actions** (gated behind `isOrganizer`):
-  - Set/edit total cost and per-person share
-  - Set/extend payment deadlines
-  - Remove members
-  - View full payment ledger (dollar amounts per member)
-  - Adjust plans and budget categories
-  - Toggle "No-Drama Mode" for the group
-- **Member-only view**:
-  - Total trip amount (read-only)
-  - Their required share (read-only)
-  - Their personal contribution history
-  - Their remaining balance
-  - Can only pay for themselves
-  - Cannot see others' dollar amounts (unless organizer enables transparency)
+### Phase 1: Database - `recalc_trip_total` Function + Triggers
 
-**C. Shared Group Dashboard section** (visible to all):
-  - Total trip cost
-  - Total funded (percentage)
-  - Remaining balance (percentage)
-  - Countdown to deadline
-  - Member status: Paid / Partial / Not Paid (status badges only, no dollar amounts by default)
+Create a Postgres function `recalc_trip_total(p_trip_id uuid)` that:
+1. Computes `SELECT COALESCE(SUM(price), 0) FROM bookings WHERE trip_id = p_trip_id` 
+2. Updates `trips.total_cost` to this computed sum
+3. Returns the new total
 
----
+Create triggers on `bookings` table for INSERT, UPDATE (of `price`), and DELETE that call `recalc_trip_total(NEW.trip_id)` (or `OLD.trip_id` for DELETE). This replaces the fragile manual `total_cost` adjustment in `PlanTab.tsx`.
 
-## Phase 2: No-Drama Mode as Core Feature (Prompt 2)
+No trigger on `trip_members` is needed for share recalculation because the views already compute `per_person_cost` dynamically from `total_cost / member_count` on every query.
 
-### Current State
-- No-Drama Mode is a small toggle at the bottom of FundTab with minimal effect (hides dollar amounts in member list)
+### Phase 2: Database - `get_trip_funding_summary` RPC
 
-### Changes
+Create an RPC function `get_trip_funding_summary(p_trip_id uuid)` that returns a single row from the `trip_funding_summary` view for the given trip. This gives the frontend a clean callable endpoint.
 
-**A. Elevate No-Drama Mode to a prominent system-level feature**
-- Move from a hidden toggle to a **visible badge in the trip header** (`TripDashboard.tsx`)
-- Display: `No-Drama Mode: ON` badge near the trip name
-- When ON (default for all trips):
-  - Automatic deadline reminders at 14, 7, 3, 1 days (already partially implemented)
-  - Late payer visual warnings (amber/red status badges)
-  - Organizer gets "Remove Member" or "Extend Deadline" action buttons on overdue members
-  - Auto-recalculation of per-person share when a member is removed
+Create an RPC function `get_member_funding(p_trip_id uuid)` that returns all rows from `trip_member_funding` for the given trip. Both use `SECURITY DEFINER` with an internal membership check to enforce access control.
 
-**B. Add visible system rule card**
-- New card in Overview: "If a member does not meet their payment deadline, the organizer can remove them and auto-adjust the per-person share."
-- This makes the enforcement mechanism transparent and impersonal
+### Phase 3: Frontend - Wire FundTab to Server-Computed Values
 
-**C. Anti-drama messaging**
-- Rewrite copy throughout to emphasize: "The system enforces fairness" (not the organizer)
-- Deadline reminders use neutral, structured language
+**`src/components/tabs/FundTab.tsx`**:
+- Replace the manual math block (lines 74-86) with a query to `trip_member_funding` view filtered by `trip_id`
+- `perPersonCost` comes from the view's `per_person_cost` column
+- `myPaid` comes from `amount_paid` where `user_id` matches
+- `myRemaining` comes from `amount_remaining`
+- `myStatus` comes from `member_status`
+- `totalFunded` and `pctFunded` come from `trip_funding_summary` view
+- Remove the separate `payments` query; use `trip_member_funding` for member status list
+- Keep all existing UI structure and styling unchanged
 
----
+### Phase 4: Frontend - Wire OverviewTab to Server-Computed Values
 
-## Phase 3: Fund Tab Redesign (Prompt 4)
+**`src/components/tabs/OverviewTab.tsx`**:
+- Replace client-side math (lines 108-129) with queries to the two views
+- Pass server-computed values to `PersonalStatusCard`, `TripHealthCard`, and the Group Funding section
+- Remove the separate `payments` and `myPayment` queries; use the views instead
 
-### Current State
-- Progress ring at top, contribution field, payment plan, member list mixed together
-- No clear separation between group vs personal responsibility
+### Phase 5: Frontend - Remove Manual total_cost Adjustment from PlanTab
 
-### Changes
+**`src/components/tabs/PlanTab.tsx`**:
+- In `addBooking` mutation: remove the manual `total_cost` increment (lines 122-127). The trigger handles it.
+- In `deleteBooking` mutation: remove the manual `total_cost` decrement (lines 141-145). The trigger handles it.
+- After each mutation success, invalidate `["trip", tripId]` and `["trip-funding-summary", tripId]` to pick up the trigger-updated value.
 
-**A. Top Section: "Your Responsibility" (personal, always visible)**
-- Card showing:
-  - Total Trip Cost (read-only)
-  - Your Share: $X
-  - You Have Paid: $X
-  - You Still Owe: $X
-  - Deadline: MMM d, yyyy
-  - Clear warning: "What happens if I don't pay?" (links to system rule)
+### Phase 6: Frontend - TripDetailsCard Shows Computed Per-Person
 
-**B. Middle Section: "Group Funding" (shared view)**
-- Group progress bar (percentage only by default)
-- Member payment status list showing ONLY status badges (Paid / Partial / Not Paid)
-- Dollar amounts shown only if organizer enables transparency mode
-- Trip Health score card (retained, refined)
+**`src/components/overview/TripDetailsCard.tsx`**:
+- Add optional `computedPerPerson` prop
+- Display `computedPerPerson` (from the view) instead of `trip.per_person_budget` when available
+- Caller (`OverviewTab`) passes the view-computed value
 
-**C. Bottom Section: "Make a Payment" (personal action)**
-- Payment input field
-- "Submit Payment" button (renamed from "Contribute")
-- Contribution history log (personal only)
+### Phase 7: Frontend - Organizer "Edit Trip Total" 
 
-**D. Payment Plan section stays** but moves under "Your Responsibility"
+**`src/components/tabs/FundTab.tsx`** (organizer section):
+- Add an inline edit field (visible only to organizers) that allows setting `trips.total_cost` directly
+- On save, update `trips.total_cost` via supabase update, then invalidate queries
+- This is the manual override; the trigger-computed value from bookings will be overwritten if the organizer edits directly, and will be re-overwritten if bookings change afterward (this is intentional -- bookings are the source of truth when they exist)
 
 ---
 
-## Phase 4: Hype Tab Redesign (Prompt 3)
+## Technical Details
 
-### Current State
-- Countdown, timeline, outfit board, packing checklist all mixed together
-- Decorative, no clear purpose
+### SQL Migration
 
-### Changes
+```text
+-- 1. recalc_trip_total function
+CREATE OR REPLACE FUNCTION public.recalc_trip_total(p_trip_id uuid)
+RETURNS numeric
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_total numeric;
+BEGIN
+  SELECT COALESCE(SUM(price), 0) INTO v_total
+  FROM bookings WHERE trip_id = p_trip_id;
 
-**A. Restructure into 3 purpose-driven sections:**
+  UPDATE trips SET total_cost = v_total WHERE id = p_trip_id;
+  RETURN v_total;
+END;
+$$;
 
-1. **Commitment Layer** (top)
-   - Countdown to trip
-   - "You've invested $X" personal stat
-   - "You are X% committed" progress indicator
+-- 2. Trigger function
+CREATE OR REPLACE FUNCTION public.trg_recalc_trip_total()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM recalc_trip_total(OLD.trip_id);
+    RETURN OLD;
+  ELSE
+    PERFORM recalc_trip_total(NEW.trip_id);
+    RETURN NEW;
+  END IF;
+END;
+$$;
 
-2. **Social Momentum Layer** (middle)
-   - Member status grid with icons:
-     - Check: Paid
-     - Hourglass: Partial
-     - Warning: Needs Action
-   - No dollar amounts, just visual accountability
+-- 3. Trigger on bookings
+CREATE TRIGGER bookings_recalc_total
+AFTER INSERT OR UPDATE OF price OR DELETE
+ON bookings
+FOR EACH ROW
+EXECUTE FUNCTION trg_recalc_trip_total();
 
-3. **Trip Prep Layer** (bottom, visually separated)
-   - Outfit board (keep existing)
-   - Packing checklist (keep existing)
-   - Clear visual divider labeled "Trip Prep" to separate from financial sections
+-- 4. RPC for trip funding summary
+CREATE OR REPLACE FUNCTION public.get_trip_funding_summary(p_trip_id uuid)
+RETURNS TABLE(
+  trip_id uuid, trip_name text, total_cost numeric,
+  member_count int, per_person_cost numeric,
+  total_funded numeric, total_remaining numeric,
+  percent_funded numeric, payment_deadline date,
+  days_to_deadline int
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT * FROM trip_funding_summary
+  WHERE trip_id = p_trip_id
+    AND is_trip_member(auth.uid(), p_trip_id);
+$$;
 
-**B. Remove timeline/notifications section from Hype** (move to Overview if needed)
-
----
-
-## Phase 5: Plan Tab Restructure (Prompt 6)
-
-### Current State
-- Budget breakdown, itinerary, host controls all in one tab
-- Budget categories are disconnected from actual trip cost
-
-### Changes
-
-**A. Restructure hierarchy: Plan = What We're Booking**
-- Sections:
-  1. Flights
-  2. Stay (renamed from Hotels)
-  3. Experiences
-  4. Shared Costs (new category)
-  5. Buffer (new category)
-
-**B. Connect Plan to Fund**
-- Each booking displays: Cost, Who it applies to (All / Specific members), Paid/Unpaid status
-- When a booking is added with a price, it auto-updates `trips.total_cost` via a mutation
-- Budget categories feed directly into total trip cost calculation
-- Remove the separate "Budget Breakdown" section; merge into the booking categories
-
-**C. Host Controls stay** but are simplified:
-  - Remove member (with auto-share recalculation)
-  - Adjust deadline
-  - Send announcement
-
----
-
-## Phase 6: Trip Health Score (Prompt 5)
-
-### Current State
-- Basic health score exists in FundTab using a simple formula
-
-### Changes
-
-**A. Refined Trip Health calculation:**
-```
-healthScore = (pctFunded * 0.4) + (pctMembersOnTrack * 0.3) + (deadlineBuffer * 0.2) + (latePaymentPenalty * 0.1)
+-- 5. RPC for member funding
+CREATE OR REPLACE FUNCTION public.get_member_funding(p_trip_id uuid)
+RETURNS TABLE(
+  trip_id uuid, user_id uuid, role text,
+  display_name text, amount_paid numeric,
+  per_person_cost numeric, amount_remaining numeric,
+  member_status text, pct_complete numeric
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT * FROM trip_member_funding
+  WHERE trip_id = p_trip_id
+    AND is_trip_member(auth.uid(), p_trip_id);
+$$;
 ```
 
-**B. Trip Health statuses with clear labels:**
-- >= 80: "Healthy" (green)
-- 60-79: "At Risk" (amber)
-- 40-59: "Needs Action" (orange)
-- < 40: "Critical" (red)
+### Files Changed
 
-**C. Overdue member handling:**
-- System auto-flags: Warning badge "Payment overdue" on member card
-- Organizer sees action buttons: "Remove Member" or "Extend Deadline"
-- On member removal: auto-recalculate per-person share for remaining members
+| File | Change Type |
+|------|------------|
+| DB migration | New functions + trigger |
+| `src/components/tabs/FundTab.tsx` | Replace client math with view queries; add organizer edit total |
+| `src/components/tabs/OverviewTab.tsx` | Replace client math with view queries |
+| `src/components/tabs/PlanTab.tsx` | Remove manual total_cost adjustment |
+| `src/components/overview/TripDetailsCard.tsx` | Accept computed per-person prop |
+| `src/components/overview/FundingSummaryCard.tsx` | Minor: ensure it uses passed props (already does) |
 
-**D. Move Trip Health to a prominent position** in the Overview tab header area
+### What Does NOT Change
+- No styling changes
+- No new UI components
+- No changes to edge functions
+- No changes to auth flow
+- Payment plan logic in FundTab stays as-is (it reads from the same computed values)
 
----
-
-## Phase 7: Overview Tab Cleanup (Prompt 1 + 7)
-
-### Current State
-- FundingSummaryCard, TripDetails, InviteCode, BudgetAlert, PaymentDeadline, Members, Packing, Settings all in one scroll
-
-### Changes
-
-**A. Restructure Overview into clear hierarchy:**
-1. **Trip Health + Status** (top) - health score, countdown, deadline
-2. **Your Status** - personal share, paid, remaining (compact card)
-3. **Group Status** - total funded %, member status badges
-4. **Trip Details** - destination, dates, vibe
-5. **Members** - list with status badges and organizer actions
-6. **System Rules** - No-Drama Mode card with enforcement rules
-7. **Settings** - display name, sign out (bottom)
-
-**B. Remove from Overview:**
-- Full FundingSummaryCard (too detailed for overview; detailed view lives in Fund tab)
-- Packing list (moved to Hype/Trip Prep)
-
----
-
-## Phase 8: Tab Consolidation
-
-### Current 5 tabs: Overview, Fund, Plan, Unlock, Hype
-
-### New 4 tabs:
-1. **Overview** - Trip health, personal status, group status, members, settings
-2. **Fund** - Personal responsibility, group funding progress, payment actions, history
-3. **Plan** - Bookings (Flights, Stay, Experiences, Shared Costs, Buffer) + Host Controls
-4. **Hype** - Commitment stats, social momentum, outfit board, packing
-
-### Unlock tab removal:
-- Merge unlock/lock status into Plan tab as a gate header
-- If trip is not fully funded, Plan shows bookings as read-only with a locked overlay
-- Remove dedicated Unlock tab to reduce cognitive overhead
-
----
-
-## Files to Change
-
-| File | Change |
-|------|--------|
-| `src/hooks/useTripRole.ts` | NEW - shared role hook |
-| `src/pages/TripDashboard.tsx` | Remove Unlock tab, add No-Drama badge to header, 4-tab layout |
-| `src/components/tabs/FundTab.tsx` | Full restructure into 3 sections |
-| `src/components/tabs/OverviewTab.tsx` | Restructure hierarchy, remove packing, add system rules card |
-| `src/components/tabs/HypeTab.tsx` | Restructure into commitment/momentum/prep sections |
-| `src/components/tabs/PlanTab.tsx` | Merge bookings, connect costs to total, add lock gate |
-| `src/components/tabs/UnlockTab.tsx` | DELETE (merged into Plan) |
-| `src/components/overview/FundingSummaryCard.tsx` | Simplify for overview use, detail in Fund tab |
-| `src/components/overview/MembersCard.tsx` | Add overdue flags, organizer actions |
-| `src/components/overview/TripDetailsCard.tsx` | Minor copy updates |
-| `src/components/overview/SystemRulesCard.tsx` | NEW - No-Drama enforcement rules display |
-| `src/components/overview/TripHealthCard.tsx` | NEW - prominent health score card |
-| `src/components/overview/PersonalStatusCard.tsx` | NEW - your share, paid, remaining |
-| `src/lib/funding-utils.ts` | Update health score formula, add Trip Health status labels |
-
----
-
-## Implementation Order
-
-1. Create `useTripRole` hook (foundation for everything)
-2. Create new component files (SystemRulesCard, TripHealthCard, PersonalStatusCard)
-3. Restructure OverviewTab
-4. Restructure FundTab (3-section layout)
-5. Restructure HypeTab (3-layer layout)
-6. Restructure PlanTab (merge bookings + lock gate)
-7. Update TripDashboard (remove Unlock tab, add No-Drama badge, 4 tabs)
-8. Delete UnlockTab
-9. Update funding-utils with refined health score
-10. Update MembersCard with overdue handling
-
----
-
-## Design Principles Applied
-
-Every feature must tie to one of these pillars:
-- **Transparency**: Group funding visible as percentages; personal details private
-- **Accountability**: Status badges, commitment indicators, health scores
-- **Deadline Enforcement**: System-driven reminders, overdue flags, removal mechanism
-- **Emotional Neutrality**: "The system enforces fairness" - not the organizer
-- **Commitment Visibility**: Investment tracking, completion percentages, social momentum
-
-Features that don't serve these pillars are removed or simplified.
