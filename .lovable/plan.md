@@ -1,39 +1,45 @@
 
 
-# Fix Payment Tracking After Stripe Checkout
+# Fix Authentication: Signup Flow and Password Reset
 
-## Problem
-After a successful Stripe checkout, the app redirects back but payments aren't recorded. Two issues cause this:
+## Problems Found
 
-1. **Webhook crash**: The `stripe-webhook` function uses `stripe.webhooks.constructEvent()` (synchronous), but Deno requires the async version `constructEventAsync()`. Every webhook call fails with "SubtleCryptoProvider cannot be used in a synchronous context", so `payment_history` is never written and `payments.amount_paid` is never updated.
+1. **Signup misleads users**: Auto-confirm is enabled, so accounts are created and logged in instantly — but the code shows "Check your email" and doesn't navigate. Users sit waiting for an email that never arrives.
 
-2. **No post-payment refresh**: When Stripe redirects back to `/trip/{id}?payment=success`, the app doesn't detect the query parameter, show a confirmation, or refresh the dashboard data.
+2. **No password reset**: Users who forget their password have no way to recover their account. They try signing up again (gets "already registered") and try wrong passwords (gets "Invalid login credentials") with no escape.
 
 ## Plan
 
-### 1. Fix the webhook (stripe-webhook/index.ts)
-- Replace `stripe.webhooks.constructEvent(body, signature, webhookSecret)` with `await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)`
-- This is the only change needed -- the rest of the webhook logic (insert into `payment_history`, update `payments.amount_paid`) is already correct
+### 1. Fix signup to navigate immediately (Auth.tsx)
 
-### 2. Add post-payment detection (TripDashboard.tsx)
-- Read `?payment=success` from the URL on mount
-- Show a success toast confirming the payment went through
-- Force-refresh the dashboard query so updated amounts appear immediately
-- Clean the query param from the URL so refreshing doesn't re-trigger the toast
-- Also switch to the "fund" tab automatically so the user sees their updated balance
+Since auto-confirm is on, after a successful signup the session is created instantly. Change the signup handler to:
+- Check if a session was returned (auto-confirm produces one)
+- If yes: show a welcome toast and navigate to `/`
+- If no session (email confirmation required): show the "check your email" toast
 
-### 3. Deploy and verify
-- Deploy the updated `stripe-webhook` function
-- Confirm the webhook processes successfully in logs
+### 2. Add "Forgot password?" link (Auth.tsx)
 
-## Technical Details
+Add a "Forgot your password?" button on the sign-in form that:
+- Prompts for email
+- Calls `supabase.auth.resetPasswordForEmail()` with redirect to `/reset-password`
+- Shows a toast confirming the reset email was sent
 
-**File changes:**
+### 3. Create a Reset Password page (new file: src/pages/ResetPassword.tsx)
+
+- Detects `type=recovery` in the URL hash (set by the password reset link)
+- Shows a form to enter a new password
+- Calls `supabase.auth.updateUser({ password })` to save it
+- Navigates to `/` on success
+
+### 4. Add route for /reset-password (App.tsx)
+
+Register the new `/reset-password` route as a public page.
+
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/functions/stripe-webhook/index.ts` | Line 45: `constructEvent` to `await constructEventAsync` |
-| `src/pages/TripDashboard.tsx` | Add `useEffect` + `useSearchParams` to detect `?payment=success`, show toast, refresh dashboard, switch to fund tab |
-
-No database or migration changes needed -- the schema already supports everything. The webhook was just failing silently.
+| `src/pages/Auth.tsx` | Fix signup to navigate on auto-confirm; add forgot password UI |
+| `src/pages/ResetPassword.tsx` | New page for setting a new password after reset link |
+| `src/App.tsx` | Add `/reset-password` route |
 
