@@ -513,7 +513,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      trip_member_funding: {
+        Row: {
+          amount_paid: number | null
+          amount_remaining: number | null
+          display_name: string | null
+          member_status: string | null
+          pct_complete: number | null
+          per_person_cost: number | null
+          role: string | null
+          trip_id: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_members_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       is_trip_member: {
