@@ -67,7 +67,18 @@ serve(async (req) => {
       const amountDollars = amountCents / 100;
 
       // ---- 3. Idempotent insert into payment_history ----
-      // The unique constraint on stripe_event_id prevents duplicate processing.
+      // Check for duplicate using stripe_session_id (no stripe_event_id column)
+      const { data: existing } = await supabaseAdmin
+        .from("payment_history")
+        .select("id")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+
+      if (existing) {
+        console.log("Duplicate session — already processed:", session.id);
+        return _ok();
+      }
+
       const { error: historyErr } = await supabaseAdmin
         .from("payment_history")
         .insert({
@@ -76,15 +87,9 @@ serve(async (req) => {
           amount: amountDollars,
           status: "paid",
           stripe_session_id: session.id,
-          stripe_event_id: event.id,
         });
 
       if (historyErr) {
-        // 23505 = unique_violation (duplicate stripe_event_id)
-        if (historyErr.code === "23505") {
-          console.log("Duplicate event — already processed:", event.id);
-          return _ok();
-        }
         console.error("Insert payment_history failed:", historyErr);
         return new Response("Database error", { status: 500 });
       }
