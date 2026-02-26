@@ -541,6 +541,108 @@ export type Database = {
           },
         ]
       }
+      trip_plan_items: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          day_number: number | null
+          description: string | null
+          est_cost: number | null
+          id: string
+          source_url: string | null
+          status: string
+          time_block: string | null
+          title: string
+          trip_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          day_number?: number | null
+          description?: string | null
+          est_cost?: number | null
+          id?: string
+          source_url?: string | null
+          status?: string
+          time_block?: string | null
+          title: string
+          trip_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          day_number?: number | null
+          description?: string | null
+          est_cost?: number | null
+          id?: string
+          source_url?: string | null
+          status?: string
+          time_block?: string | null
+          title?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_plan_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "trip_plan_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_plan_sessions: {
+        Row: {
+          answers_json: Json | null
+          created_at: string
+          generated_plan_json: Json | null
+          id: string
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          answers_json?: Json | null
+          created_at?: string
+          generated_plan_json?: Json | null
+          id?: string
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          answers_json?: Json | null
+          created_at?: string
+          generated_plan_json?: Json | null
+          id?: string
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_plan_sessions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "trip_plan_sessions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trips: {
         Row: {
           cover_image_url: string | null

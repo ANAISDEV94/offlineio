@@ -9,9 +9,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTripDashboard } from "@/hooks/useTripDashboard";
+import { useTripRole } from "@/hooks/useTripRole";
 import { motion } from "framer-motion";
-import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck } from "lucide-react";
+import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck, Wand2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import AiTripPlanner from "@/components/AiTripPlanner";
 
 interface PlanTabProps {
   tripId: string;
@@ -41,9 +43,11 @@ const BOOKING_CATEGORIES = [
 const PlanTab = ({ tripId }: PlanTabProps) => {
   const { user } = useAuth();
   const { dashboard, refresh } = useTripDashboard(tripId);
+  const { isOrganizer: canApprove } = useTripRole(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [hostControlsOpen, setHostControlsOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
   const [newBooking, setNewBooking] = useState({ title: "", price: "", category: "flights", notes: "" });
@@ -71,6 +75,31 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       return data;
     },
   });
+
+  const { data: draftItems = [] } = useQuery({
+    queryKey: ["trip-plan-items", tripId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("trip_plan_items" as any).select("*").eq("trip_id", tripId).order("created_at");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  const approveDraft = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("trip_plan_items" as any).update({ status: "approved" } as any).eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trip-plan-items", tripId] });
+      toast({ title: "Item approved" });
+    },
+  });
+
+  const handlePlanSaved = () => {
+    queryClient.invalidateQueries({ queryKey: ["trip-plan-items", tripId] });
+    refresh();
+  };
 
   if (!dashboard) return null;
 
@@ -209,8 +238,92 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
 
   const totalBookingCost = bookings.reduce((s, b) => s + (Number(b.price) || 0), 0);
 
+  const draftBudgetItems = draftItems.filter((d: any) => !d.day_number && d.status === "draft");
+  const draftItineraryItems = draftItems.filter((d: any) => d.day_number && d.status === "draft");
+  const hasDrafts = draftItems.length > 0;
+
   return (
     <div className="space-y-6">
+      {/* AI Trip Planner Entry Point */}
+      <Card className="border-0 shadow-sm bg-gradient-to-r from-primary/10 to-primary/5 cursor-pointer hover:shadow-md transition-shadow"
+        onClick={() => setPlannerOpen(true)}>
+        <CardContent className="p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Wand2 className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium">Plan this trip for me</p>
+            <p className="text-[10px] text-muted-foreground">Answer a few questions and AI generates your budget + itinerary</p>
+          </div>
+          <Sparkles className="h-4 w-4 text-primary" />
+        </CardContent>
+      </Card>
+
+      <AiTripPlanner tripId={tripId} open={plannerOpen} onOpenChange={setPlannerOpen} onSaved={handlePlanSaved} />
+
+      {/* Draft Plan Items */}
+      {hasDrafts && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">AI Draft Plan</p>
+          {draftBudgetItems.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {draftBudgetItems.map((item: any) => (
+                <Card key={item.id} className="border-0 shadow-sm">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-medium">{item.title}</p>
+                      <Badge variant="secondary" className="text-[10px]">{item.status === "draft" ? "Draft" : "Approved"}</Badge>
+                    </div>
+                    <p className="text-lg font-semibold">${Number(item.est_cost || 0).toLocaleString()}</p>
+                    {item.description && <p className="text-[10px] text-muted-foreground mt-1">{item.description}</p>}
+                    {canApprove && item.status === "draft" && (
+                      <Button size="sm" variant="outline" className="mt-2 h-6 text-[10px] rounded-full" onClick={() => approveDraft.mutate(item.id)}>
+                        <CheckCircle className="h-3 w-3 mr-1" /> Approve
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          {draftItineraryItems.length > 0 && (
+            <div className="space-y-2">
+              {Object.entries(
+                draftItineraryItems.reduce<Record<number, any[]>>((acc, item: any) => {
+                  const day = item.day_number || 1;
+                  (acc[day] = acc[day] || []).push(item);
+                  return acc;
+                }, {})
+              ).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
+                <Card key={day} className="border-0 shadow-sm">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">Day {day}</p>
+                      <Badge variant="secondary" className="text-[10px]">Draft</Badge>
+                    </div>
+                    {items.map((item: any) => (
+                      <div key={item.id} className="flex gap-3">
+                        <span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize">{item.time_block || "—"}</span>
+                        <div className="flex-1">
+                          <p className="text-sm">{item.title}</p>
+                          {item.description && <p className="text-[10px] text-muted-foreground">{item.description}</p>}
+                          {item.est_cost > 0 && <p className="text-[10px] text-muted-foreground">~${Number(item.est_cost).toLocaleString()}</p>}
+                        </div>
+                        {canApprove && item.status === "draft" && (
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => approveDraft.mutate(item.id)}>
+                            <CheckCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Funding Gate */}
       {!isFullyFunded && (
         <Card className="border-0 shadow-sm bg-muted/50">
