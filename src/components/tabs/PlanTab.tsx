@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTripDashboard } from "@/hooks/useTripDashboard";
 import { useTripRole } from "@/hooks/useTripRole";
 import { motion } from "framer-motion";
-import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck, Wand2, CheckCircle, Unlock } from "lucide-react";
+import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck, Wand2, ThumbsUp, Undo2, Unlock, ArchiveRestore } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import AiTripPlanner from "@/components/AiTripPlanner";
 import OrganizerBookingCard from "@/components/OrganizerBookingCard";
@@ -61,6 +62,9 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
   const [newDay, setNewDay] = useState(1);
   const [newTime, setNewTime] = useState("");
   const [shareOverrides, setShareOverrides] = useState<Record<string, string>>({});
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [draftEditForm, setDraftEditForm] = useState({ title: "", description: "", est_cost: "", time_block: "" });
+  const [dismissedOpen, setDismissedOpen] = useState(false);
 
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ["bookings", tripId],
@@ -89,19 +93,59 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
     },
   });
 
+  const invalidateDrafts = () => queryClient.invalidateQueries({ queryKey: ["trip-plan-items", tripId] });
+
   const approveDraft = useMutation({
     mutationFn: async (itemId: string) => {
       const { error } = await supabase.from("trip_plan_items" as any).update({ status: "approved" } as any).eq("id", itemId);
       if (error) throw error;
     },
+    onSuccess: () => { invalidateDrafts(); toast({ title: "✅ Item approved" }); },
+  });
+
+  const unapprove = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("trip_plan_items" as any).update({ status: "draft" } as any).eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidateDrafts(); toast({ title: "Moved back to draft" }); },
+  });
+
+  const dismissDraft = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("trip_plan_items" as any).update({ status: "dismissed" } as any).eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidateDrafts(); toast({ title: "Item dismissed" }); },
+  });
+
+  const restoreDraft = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("trip_plan_items" as any).update({ status: "draft" } as any).eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidateDrafts(); toast({ title: "Item restored to draft" }); },
+  });
+
+  const updateDraft = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase.from("trip_plan_items" as any).update({
+        title: draftEditForm.title,
+        description: draftEditForm.description || null,
+        est_cost: draftEditForm.est_cost ? Number(draftEditForm.est_cost) : null,
+        time_block: draftEditForm.time_block || null,
+      } as any).eq("id", itemId);
+      if (error) throw error;
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trip-plan-items", tripId] });
-      toast({ title: "Item approved" });
+      invalidateDrafts();
+      setEditingDraftId(null);
+      toast({ title: "Item updated" });
     },
   });
 
   const handlePlanSaved = () => {
-    queryClient.invalidateQueries({ queryKey: ["trip-plan-items", tripId] });
+    invalidateDrafts();
     refresh();
   };
 
@@ -244,7 +288,184 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
 
   const draftBudgetItems = draftItems.filter((d: any) => !d.day_number && d.status === "draft");
   const draftItineraryItems = draftItems.filter((d: any) => d.day_number && d.status === "draft");
-  const hasDrafts = draftItems.length > 0;
+  const approvedBudgetItems = draftItems.filter((d: any) => !d.day_number && d.status === "approved");
+  const approvedItineraryItems = draftItems.filter((d: any) => d.day_number && d.status === "approved");
+  const dismissedItems = draftItems.filter((d: any) => d.status === "dismissed");
+  const hasDrafts = draftBudgetItems.length > 0 || draftItineraryItems.length > 0;
+  const hasApproved = approvedBudgetItems.length > 0 || approvedItineraryItems.length > 0;
+
+  const canEditDraft = (item: any) => canApprove || item.created_by === user?.id;
+
+  const startEditingDraft = (item: any) => {
+    setEditingDraftId(item.id);
+    setDraftEditForm({
+      title: item.title || "",
+      description: item.description || "",
+      est_cost: item.est_cost ? String(item.est_cost) : "",
+      time_block: item.time_block || "",
+    });
+  };
+
+  // Render a single draft/approved plan item
+  const renderPlanItem = (item: any, status: "draft" | "approved") => {
+    const isEditing = editingDraftId === item.id;
+    const editable = canEditDraft(item);
+
+    if (isEditing) {
+      return (
+        <div key={item.id} className="space-y-2 p-3 rounded-xl bg-muted/50">
+          <Input
+            value={draftEditForm.title}
+            onChange={e => setDraftEditForm(p => ({ ...p, title: e.target.value }))}
+            className="rounded-xl text-sm h-8"
+            placeholder="Title"
+          />
+          <Textarea
+            value={draftEditForm.description}
+            onChange={e => setDraftEditForm(p => ({ ...p, description: e.target.value }))}
+            className="rounded-xl text-sm min-h-[60px]"
+            placeholder="Description..."
+          />
+          <div className="flex gap-2">
+            <Input
+              value={draftEditForm.time_block}
+              onChange={e => setDraftEditForm(p => ({ ...p, time_block: e.target.value }))}
+              className="rounded-xl text-sm h-8 w-28"
+              placeholder="Time (e.g. Morning)"
+            />
+            <Input
+              type="number"
+              value={draftEditForm.est_cost}
+              onChange={e => setDraftEditForm(p => ({ ...p, est_cost: e.target.value }))}
+              className="rounded-xl text-sm h-8 w-24"
+              placeholder="Cost"
+            />
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateDraft.mutate(item.id)} disabled={!draftEditForm.title.trim()}>
+              <Check className="h-3 w-3 mr-1" /> Save
+            </Button>
+            <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingDraftId(null)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={item.id} className="flex gap-3">
+        <span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize">{item.time_block || "—"}</span>
+        <div className="flex-1">
+          <p className="text-sm">{item.title}</p>
+          {item.description && <p className="text-[10px] text-muted-foreground">{item.description}</p>}
+          {item.est_cost > 0 && <p className="text-[10px] text-muted-foreground">~${Number(item.est_cost).toLocaleString()}</p>}
+          {editable && (
+            <div className="flex gap-1 mt-1.5">
+              {status === "draft" && canApprove && (
+                <Button size="sm" variant="outline" className="h-6 text-[10px] rounded-full gap-1 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800" onClick={() => approveDraft.mutate(item.id)}>
+                  <ThumbsUp className="h-3 w-3" /> Approve
+                </Button>
+              )}
+              {status === "approved" && canApprove && (
+                <Button size="sm" variant="outline" className="h-6 text-[10px] rounded-full gap-1" onClick={() => unapprove.mutate(item.id)}>
+                  <Undo2 className="h-3 w-3" /> Undo
+                </Button>
+              )}
+              {status === "draft" && (
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] rounded-full gap-1" onClick={() => startEditingDraft(item)}>
+                  <Pencil className="h-3 w-3" /> Edit
+                </Button>
+              )}
+              {status === "draft" && (
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] rounded-full gap-1 text-destructive hover:text-destructive" onClick={() => dismissDraft.mutate(item.id)}>
+                  <Trash2 className="h-3 w-3" /> Dismiss
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render a budget card for draft/approved items
+  const renderBudgetCard = (item: any, status: "draft" | "approved") => {
+    const isEditing = editingDraftId === item.id;
+    const editable = canEditDraft(item);
+
+    if (isEditing) {
+      return (
+        <Card key={item.id} className="border-0 shadow-sm">
+          <CardContent className="p-3 space-y-2">
+            <Input value={draftEditForm.title} onChange={e => setDraftEditForm(p => ({ ...p, title: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Title" />
+            <Input type="number" value={draftEditForm.est_cost} onChange={e => setDraftEditForm(p => ({ ...p, est_cost: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Cost" />
+            <Textarea value={draftEditForm.description} onChange={e => setDraftEditForm(p => ({ ...p, description: e.target.value }))} className="rounded-xl text-sm min-h-[50px]" placeholder="Description..." />
+            <div className="flex gap-1">
+              <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateDraft.mutate(item.id)} disabled={!draftEditForm.title.trim()}>
+                <Check className="h-3 w-3 mr-1" /> Save
+              </Button>
+              <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingDraftId(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card key={item.id} className="border-0 shadow-sm">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium">{item.title}</p>
+            <Badge
+              variant="secondary"
+              className={`text-[10px] ${status === "approved" ? "bg-green-100 text-green-700 border-green-200" : ""}`}
+            >
+              {status === "draft" ? "Draft" : "Approved"}
+            </Badge>
+          </div>
+          <p className="text-lg font-semibold">${Number(item.est_cost || 0).toLocaleString()}</p>
+          {item.description && <p className="text-[10px] text-muted-foreground mt-1">{item.description}</p>}
+          {editable && (
+            <div className="flex gap-1 mt-2">
+              {status === "draft" && canApprove && (
+                <Button size="sm" variant="outline" className="h-6 text-[10px] rounded-full gap-1 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800" onClick={() => approveDraft.mutate(item.id)}>
+                  <ThumbsUp className="h-3 w-3" /> Approve
+                </Button>
+              )}
+              {status === "approved" && canApprove && (
+                <Button size="sm" variant="outline" className="h-6 text-[10px] rounded-full gap-1" onClick={() => unapprove.mutate(item.id)}>
+                  <Undo2 className="h-3 w-3" /> Undo
+                </Button>
+              )}
+              {status === "draft" && (
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] rounded-full gap-1" onClick={() => startEditingDraft(item)}>
+                  <Pencil className="h-3 w-3" /> Edit
+                </Button>
+              )}
+              {status === "draft" && (
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] rounded-full gap-1 text-destructive hover:text-destructive" onClick={() => dismissDraft.mutate(item.id)}>
+                  <Trash2 className="h-3 w-3" /> Dismiss
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Group itinerary-type items by day
+  const groupByDay = (items: any[]) =>
+    Object.entries(
+      items.reduce<Record<number, any[]>>((acc, item) => {
+        const day = item.day_number || 1;
+        (acc[day] = acc[day] || []).push(item);
+        return acc;
+      }, {})
+    ).sort(([a], [b]) => Number(a) - Number(b));
 
   return (
     <div className="space-y-6">
@@ -268,64 +489,85 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
       {/* Draft Plan Items */}
       {hasDrafts && (
         <div className="space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Draft Plan</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">📝 Draft Plan</p>
           {draftBudgetItems.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
-              {draftBudgetItems.map((item: any) => (
-                <Card key={item.id} className="border-0 shadow-sm">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium">{item.title}</p>
-                      <Badge variant="secondary" className="text-[10px]">{item.status === "draft" ? "Draft" : "Approved"}</Badge>
-                    </div>
-                    <p className="text-lg font-semibold">${Number(item.est_cost || 0).toLocaleString()}</p>
-                    {item.description && <p className="text-[10px] text-muted-foreground mt-1">{item.description}</p>}
-                    {canApprove && item.status === "draft" && (
-                      <Button size="sm" variant="outline" className="mt-2 h-6 text-[10px] rounded-full" onClick={() => approveDraft.mutate(item.id)}>
-                        <CheckCircle className="h-3 w-3 mr-1" /> Approve
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+              {draftBudgetItems.map((item: any) => renderBudgetCard(item, "draft"))}
             </div>
           )}
           {draftItineraryItems.length > 0 && (
             <div className="space-y-2">
-              {Object.entries(
-                draftItineraryItems.reduce<Record<number, any[]>>((acc, item: any) => {
-                  const day = item.day_number || 1;
-                  (acc[day] = acc[day] || []).push(item);
-                  return acc;
-                }, {})
-              ).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
+              {groupByDay(draftItineraryItems).map(([day, items]) => (
                 <Card key={day} className="border-0 shadow-sm">
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">Day {day}</p>
                       <Badge variant="secondary" className="text-[10px]">Draft</Badge>
                     </div>
-                    {items.map((item: any) => (
-                      <div key={item.id} className="flex gap-3">
-                        <span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize">{item.time_block || "—"}</span>
-                        <div className="flex-1">
-                          <p className="text-sm">{item.title}</p>
-                          {item.description && <p className="text-[10px] text-muted-foreground">{item.description}</p>}
-                          {item.est_cost > 0 && <p className="text-[10px] text-muted-foreground">~${Number(item.est_cost).toLocaleString()}</p>}
-                        </div>
-                        {canApprove && item.status === "draft" && (
-                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => approveDraft.mutate(item.id)}>
-                            <CheckCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                    {items.map((item: any) => renderPlanItem(item, "draft"))}
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* Approved Plan Items */}
+      {hasApproved && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-green-700 uppercase tracking-wide px-1">✅ Approved Plan</p>
+          {approvedBudgetItems.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {approvedBudgetItems.map((item: any) => renderBudgetCard(item, "approved"))}
+            </div>
+          )}
+          {approvedItineraryItems.length > 0 && (
+            <div className="space-y-2">
+              {groupByDay(approvedItineraryItems).map(([day, items]) => (
+                <Card key={day} className="border-0 shadow-sm border-l-2 border-l-green-300">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">Day {day}</p>
+                      <Badge variant="secondary" className="text-[10px] bg-green-100 text-green-700 border-green-200">Approved</Badge>
+                    </div>
+                    {items.map((item: any) => renderPlanItem(item, "approved"))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dismissed Items */}
+      {dismissedItems.length > 0 && (
+        <Collapsible open={dismissedOpen} onOpenChange={setDismissedOpen}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors px-1">
+              <ArchiveRestore className="h-3.5 w-3.5" />
+              <span>Show dismissed items ({dismissedItems.length})</span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${dismissedOpen ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2">
+            {dismissedItems.map((item: any) => (
+              <Card key={item.id} className="border-0 shadow-sm opacity-60">
+                <CardContent className="p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm line-through">{item.title}</p>
+                    {item.est_cost > 0 && <p className="text-[10px] text-muted-foreground">~${Number(item.est_cost).toLocaleString()}</p>}
+                  </div>
+                  {canEditDraft(item) && (
+                    <Button size="sm" variant="outline" className="h-6 text-[10px] rounded-full gap-1" onClick={() => restoreDraft.mutate(item.id)}>
+                      <Undo2 className="h-3 w-3" /> Restore
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* Funding Gate Banner */}
@@ -405,7 +647,6 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
                             )}
                           </div>
                         </div>
-                        {/* Share override input */}
                         <div className="flex items-center gap-2 pl-2">
                           <Input
                             type="number" min="0" placeholder={`Share: $${m.share}`}
@@ -456,7 +697,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
         </Collapsible>
       )}
 
-      {/* Bookings by Category - only show when there's content */}
+      {/* Bookings by Category */}
       {(bookings.length > 0 || draftBudgetItems.length > 0) && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
@@ -468,7 +709,6 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
 
           {bookingsByCategory.map(cat => (
             <div key={cat.key} className="space-y-2">
-              {/* Organizer Booking Card (only for flights/stay/experiences when fully funded) */}
               {isFullyFunded && ORGANIZER_BOOKING_CATEGORIES.includes(cat.key) && (
                 <OrganizerBookingCard
                   tripId={tripId}
@@ -522,7 +762,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
             </div>
           ))}
 
-          {/* Add Booking (only when fully funded + organizer) */}
+          {/* Add Booking */}
           {isOrganizer && isFullyFunded && (
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4 space-y-3">
@@ -551,7 +791,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
         </div>
       )}
 
-      {/* Itinerary - only show when there's content */}
+      {/* Itinerary */}
       {(Object.keys(days).length > 0 || draftItineraryItems.length > 0) && (
         <div className="space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Itinerary</p>
