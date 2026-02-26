@@ -119,16 +119,13 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         price, notes: newBooking.notes || null, created_by: user.id,
       });
       if (error) throw error;
-      // Auto-update total_cost if price was provided
-      if (price && price > 0) {
-        const currentTotal = Number(trip?.total_cost) || 0;
-        await supabase.from("trips").update({ total_cost: currentTotal + price } as any).eq("id", tripId);
-        queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-      }
+      // Trigger handles total_cost update automatically
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
       setNewBooking({ title: "", price: "", category: "flights", notes: "" });
       toast({ title: "Booking added" });
     },
@@ -138,15 +135,13 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     mutationFn: async (booking: { id: string; price: number | null }) => {
       const { error } = await supabase.from("bookings").delete().eq("id", booking.id);
       if (error) throw error;
-      if (booking.price && booking.price > 0) {
-        const currentTotal = Number(trip?.total_cost) || 0;
-        await supabase.from("trips").update({ total_cost: Math.max(0, currentTotal - booking.price) } as any).eq("id", tripId);
-        queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-      }
+      // Trigger handles total_cost update automatically
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
       toast({ title: "Booking removed" });
     },
   });
