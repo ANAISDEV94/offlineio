@@ -1,107 +1,56 @@
 
-Objective: stabilize the contribution path so clicking Contribute reliably opens Stripe Checkout (no 401), webhook test events return 200, and successful payments update funding state in this Lovable Cloud backend.
 
-What I found from the current code/state:
-- `create-checkout` is already configured with `verify_jwt = false` in `supabase/config.toml`, so gateway-level JWT blocking should not be the primary issue now.
-- Direct function call without auth returns `401 {"error":"not_authenticated"}` from function code, which means requests are reaching the function.
-- Client boot logs show session is currently false in your preview, so unauthenticated usage is still likely triggering the observed 401 behavior.
-- `stripe-webhook` currently inserts `stripe_event_id` into `payment_history`, but that column does not exist in the current table schema. This will fail webhook DB writes even when signature verification succeeds.
+## Fix: 400 Bad Request on Contribute (Amount Exceeds Remaining Balance)
 
-Implementation plan (single pass)
+### Root Cause
 
-1) Client logging + strict auth gate in contribution flows
-- File: `src/components/tabs/FundTab.tsx`
-  - Add a mount-time debug block (via `useEffect`) to log:
-    - `[App Boot] VITE_SUPABASE_URL=...`
-    - whether supabase client object is initialized
-  - In Contribute handler (and keep existing payment logic):
-    - Call `supabase.auth.getSession()`
-    - Log:
-      - logged-in boolean
-      - `session.user.id` (if present)
-      - access token exists + token length (not token value)
-      - payload `{ trip_id, amount_cents }`
-    - If no session: stop request and toast exactly `Please sign in to contribute.`
-    - Invoke with explicit `Authorization: Bearer ...` header
-    - Keep redirect with `window.location.href = data.url`
-- File: `src/components/overview/FundingSummaryCard.tsx`
-  - Mirror the same auth+logging/header behavior so alternate “Pay” CTA cannot bypass the fix path.
+The 401 is fully fixed — the function now authenticates successfully. The new error is **400 Bad Request** caused by a balance validation in `create-checkout`:
 
-2) Make `create-checkout` diagnostics definitive and CORS-safe
-- File: `supabase/functions/create-checkout/index.ts`
-  - At top of request:
-    - log method
-    - log auth-header present boolean
-    - if bearer exists, log first 10 chars + token length only
-  - Keep OPTIONS preflight and CORS headers on all responses.
-  - Keep manual JWT validation (`getClaims`) and return clear 401 JSON when missing/invalid.
-  - Add startup boolean log confirming `STRIPE_SECRET_KEY` presence.
-  - Add/keep clear errors for missing env (`STRIPE_SECRET_KEY`, `SITE_URL` fallback handling as described below).
+The trip `Casa Cabo` has `total_cost = 0` (no budget set yet). This means the `trip_member_funding` view returns `per_person_cost = 0` and `amount_remaining = 0`. The edge function then rejects: `200000 > 0` → "Amount exceeds remaining balance."
 
-3) Ensure checkout URL construction is robust
-- File: `supabase/functions/create-checkout/index.ts`
-  - Validate base URL source:
-    - prefer `origin` header when called from browser
-    - fallback to `SITE_URL`
-    - if both absent, return clear 500 JSON (`SITE_URL or request origin required`)
-  - Keep response shape `{ url: checkoutUrl }`.
+### Fix
 
-4) Webhook correctness + schema-compatible DB write
-- File: `supabase/functions/stripe-webhook/index.ts`
-  - Keep signature verification using `Deno.env.get("STRIPE_WEBHOOK_SECRET")`.
-  - Keep 400 on invalid/missing signature; 200 on valid handled events.
-  - Log:
-    - signature verify success/failure
-    - `event.type`
-    - for `checkout.session.completed`: session id + amount
-  - Fix DB write to match existing schema:
-    - remove `stripe_event_id` insert (column absent)
-    - idempotency guard using existing `stripe_session_id` (check before insert; if already exists, log duplicate and return 200)
-  - Keep/update payment total update in `payments` table after history insert.
+In `supabase/functions/create-checkout/index.ts`, skip the remaining-balance guard when `per_person_cost` is 0 (i.e., no budget has been set yet). This allows contributions to flow before a total cost is finalized — which is the expected MVP behavior.
 
-5) Secrets/backend alignment verification (same project)
-- Confirm in this Lovable Cloud project:
-  - `STRIPE_SECRET_KEY` present
-  - `STRIPE_WEBHOOK_SECRET` present
-  - `SITE_URL` present (add if missing)
-  - backend-provided `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` available for functions
-- No project switching, no local CLI, no unrelated UI changes.
+### Change (1 file)
 
-6) Deployment and validation checklist you can follow immediately after implementation
-- Redeploy path (Lovable Cloud backend UI):
-  1. Open Backend
-  2. Functions → `create-checkout` → save/deploy latest
-  3. Functions → `stripe-webhook` → save/deploy latest
-  4. Functions → Logs tab for each function
-- Stripe test:
-  - Stripe Dashboard → Webhooks → endpoint `.../stripe-webhook` → Send test event `checkout.session.completed`
-- Expected success signals:
-  - Browser console:
-    - App boot URL log
-    - logged-in/session metadata logs
-    - payload log
-    - response containing checkout `url`
-  - Network:
-    - `POST /functions/v1/create-checkout` returns 200 with `{ url: ... }`
-  - `create-checkout` logs:
-    - method POST
-    - auth header present true
-    - token prefix + length
-    - authenticated user id
-    - stripe session created
-  - `stripe-webhook` logs:
-    - signature verified
-    - `event.type=checkout.session.completed`
-    - session id + amount logged
-    - payment history insert/payment update logs
-  - Webhook HTTP result:
-    - valid test event: 200
-    - invalid signature test: 400
+**`supabase/functions/create-checkout/index.ts`** (lines 100-121)
 
-Files to change in this pass:
-- `src/components/tabs/FundTab.tsx`
-- `src/components/overview/FundingSummaryCard.tsx`
-- `src/main.tsx` (only if needed for the supabase initialized boot log)
-- `supabase/functions/create-checkout/index.ts`
-- `supabase/functions/stripe-webhook/index.ts`
-- `supabase/config.toml` only if drift is detected (target remains `verify_jwt = false` for `create-checkout`)
+Current logic:
+```typescript
+const remainingDollars = Number(funding?.amount_remaining ?? 0);
+const remainingCents = Math.round(remainingDollars * 100);
+if (amount_cents > remainingCents) {
+  return _json({ error: `Amount exceeds remaining balance...` }, 400);
+}
+```
+
+Updated logic:
+```typescript
+const perPersonCost = Number(funding?.per_person_cost ?? 0);
+const remainingDollars = Number(funding?.amount_remaining ?? 0);
+const remainingCents = Math.round(remainingDollars * 100);
+
+// Only enforce the cap when a per-person cost has been set (total_cost > 0)
+if (perPersonCost > 0 && amount_cents > remainingCents) {
+  return _json({ error: `Amount exceeds remaining balance. You owe $${remainingDollars.toFixed(2)}.` }, 400);
+}
+```
+
+Also add a diagnostic log so we can confirm the check was skipped or applied:
+```typescript
+console.log("[create-checkout] perPersonCost:", perPersonCost, "remainingCents:", remainingCents);
+```
+
+### Technical Details
+
+- The `trip_member_funding` view computes `per_person_cost` from `trips.total_cost / member_count`. When `total_cost` is 0, both values are 0.
+- After this fix, contributions are uncapped until an organizer sets the trip budget. Once set, the balance guard activates normally.
+- Only 1 file changes; redeploy `create-checkout` afterward.
+
+### After Deploy — Expected Flow
+
+1. Click Contribute with $2000 → function accepts, creates Stripe session, redirects to checkout
+2. Edge function logs show: `perPersonCost: 0 remainingCents: 0` then `Stripe session created: cs_...`
+3. Stripe Checkout opens successfully
+
