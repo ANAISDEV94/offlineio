@@ -10,10 +10,10 @@ import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTripDashboard } from "@/hooks/useTripDashboard";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Heart, Plus, Loader2, Trash2, X, ImagePlus, TrendingUp, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { computeMemberStatus } from "@/lib/funding-utils";
 
 interface HypeTabProps {
   tripId: string;
@@ -23,6 +23,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { dashboard } = useTripDashboard(tripId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newPackItem, setNewPackItem] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -31,30 +32,6 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
   const [showUpload, setShowUpload] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  const { data: trip } = useQuery({
-    queryKey: ["trip", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).single();
-      if (error) throw error;
-      return data as any;
-    },
-  });
-
-  const { data: payments = [] } = useQuery({
-    queryKey: ["hype-payments", tripId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("payments").select("user_id, amount, amount_paid").eq("trip_id", tripId);
-      if (error) throw error;
-      const userIds = data.map(p => p.user_id);
-      if (userIds.length === 0) return [];
-      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
-      return data.map(p => ({
-        ...p,
-        displayName: profiles?.find(pr => pr.user_id === p.user_id)?.display_name || "Unknown",
-      }));
-    },
-  });
 
   const { data: outfits = [] } = useQuery({
     queryKey: ["outfit-posts", tripId],
@@ -152,20 +129,12 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
     }
   };
 
-  const daysUntil = trip ? Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  // Use backend-computed values
+  const daysUntil = dashboard?.days_to_trip ?? 0;
   const checkedCount = packItems.filter((i) => i.is_checked).length;
-
-  // Commitment calculations
-  const totalCost = Number(trip?.total_cost) || 0;
-  const memberCount = payments.length || 1;
-  const perPersonCost = totalCost / memberCount;
-  const myPayment = payments.find(p => p.user_id === user?.id);
-  const myPaid = myPayment ? Number(myPayment.amount_paid) : 0;
-  const commitmentPct = perPersonCost > 0 ? Math.min(100, Math.round((myPaid / perPersonCost) * 100)) : 0;
-
-  const deadlineDays = trip?.payment_deadline
-    ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
+  const myPaid = dashboard?.current_user?.paid ?? 0;
+  const myShare = dashboard?.current_user?.share ?? 0;
+  const commitmentPct = myShare > 0 ? Math.min(100, Math.round((myPaid / myShare) * 100)) : 0;
 
   return (
     <div className="space-y-8">
@@ -175,7 +144,7 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
           <Card className="border-0 shadow-sm bg-primary/5">
             <CardContent className="p-6 text-center space-y-3">
               <p className="text-5xl font-display font-semibold text-foreground">{daysUntil}</p>
-              <p className="text-sm text-muted-foreground">days until {trip?.destination || "your trip"}</p>
+              <p className="text-sm text-muted-foreground">days until {dashboard?.destination || "your trip"}</p>
               <Separator className="my-2" />
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -200,22 +169,21 @@ const HypeTab = ({ tripId }: HypeTabProps) => {
       <div className="space-y-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Squad Status</p>
         <div className="grid grid-cols-2 gap-2">
-          {payments.map((m: any) => {
-            const status = computeMemberStatus(Number(m.amount_paid), perPersonCost, deadlineDays);
+          {(dashboard?.members ?? []).map((m) => {
             const isMe = m.user_id === user?.id;
             return (
               <Card key={m.user_id} className={`border-0 shadow-sm ${isMe ? "ring-1 ring-primary/30" : ""}`}>
                 <CardContent className="p-3 flex items-center gap-2.5">
-                  {status === "Paid" ? (
+                  {m.status === "Paid" ? (
                     <CheckCircle2 className="h-4 w-4 text-accent shrink-0" />
-                  ) : status === "On Track" ? (
+                  ) : m.status === "On Track" ? (
                     <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
                   )}
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{m.displayName}</p>
-                    <p className="text-[10px] text-muted-foreground">{status}</p>
+                    <p className="text-sm font-medium truncate">{m.display_name || "Unknown"}</p>
+                    <p className="text-[10px] text-muted-foreground">{m.status}</p>
                   </div>
                 </CardContent>
               </Card>

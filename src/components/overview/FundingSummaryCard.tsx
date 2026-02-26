@@ -23,9 +23,12 @@ interface FundingSummaryCardProps {
   tripId: string;
   tripName: string;
   totalCost: number;
-  memberCount: number;
+  perPersonCost: number;
   totalFunded: number;
+  totalRemaining: number;
+  pctFunded: number;
   paymentDeadline: string | null;
+  deadlineDays: number | null;
   members: MemberFunding[];
   myPaid: number;
   myRemaining: number;
@@ -34,20 +37,13 @@ interface FundingSummaryCardProps {
 }
 
 const FundingSummaryCard = ({
-  tripId, tripName, totalCost, memberCount, totalFunded, paymentDeadline,
-  members, myPaid, myRemaining, userId, hasPaymentRecord,
+  tripId, tripName, totalCost, perPersonCost, totalFunded, totalRemaining,
+  pctFunded, paymentDeadline, deadlineDays, members, myPaid, myRemaining,
+  userId, hasPaymentRecord,
 }: FundingSummaryCardProps) => {
   const { toast } = useToast();
   const [noDrama, setNoDrama] = useState(false);
   const [paying, setPaying] = useState(false);
-
-  const perPerson = memberCount > 0 ? totalCost / memberCount : 0;
-  const totalRemaining = totalCost - totalFunded;
-  const pctFunded = totalCost > 0 ? Math.round((totalFunded / totalCost) * 100) : 0;
-
-  const deadlineDays = paymentDeadline
-    ? Math.ceil((new Date(paymentDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
 
   const size = 140;
   const stroke = 10;
@@ -59,9 +55,7 @@ const FundingSummaryCard = ({
     if (!userId || amount <= 0) return;
     setPaying(true);
     try {
-      // Phase 3 — Session gate
       const { data: { session } } = await supabase.auth.getSession();
-      console.log("[FundingSummary] session exists =", !!session);
       if (!session) {
         toast({ title: "Please sign in to contribute", variant: "destructive" });
         setPaying(false);
@@ -115,7 +109,7 @@ const FundingSummaryCard = ({
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Per person</span>
-                  <span className="font-semibold">${Math.round(perPerson).toLocaleString()}</span>
+                  <span className="font-semibold">${Math.round(perPersonCost).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Funded</span>
