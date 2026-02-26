@@ -25,9 +25,9 @@ const slides = [
     description: "Booking unlocks when your trip is fully funded. Save flights, hotels, and experiences all in one place.",
   },
   {
-    emoji: "🎉",
-    title: "Hype",
-    description: "Countdown to takeoff, post your outfits, and check off your packing list.",
+    emoji: "⚙️",
+    title: "Settings",
+    description: "Manage your profile, update your password, and keep your payment details secure.",
   },
 ];
 
