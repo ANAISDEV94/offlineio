@@ -1,53 +1,46 @@
 
 
-## Plan: Add Debug Logging to Contribute Button
+## Plan: Simplify Auth Handling in create-checkout Edge Function
 
-### Changes to `src/components/tabs/FundTab.tsx`
+### What Changes
 
-Update the `onClick` handler of the Contribute button (around lines 237-249) to add detailed debug logging:
+In `supabase/functions/create-checkout/index.ts`, simplify the authentication section (lines 25-44):
 
-1. **Before the request**: Log `tripId`, `contributionAmount`, and the final payload (`{ trip_id, amount_cents }`)
-2. **After the response**: Log the full response object (`data` and `error`) from `supabase.functions.invoke`
-3. **Redirect logic**: If `data?.url` exists, redirect. Otherwise, log the entire response as an error
-4. **On catch**: Log the full error object (not just `err.message`)
+**Remove:**
+- The explicit check for `Authorization` header existence (lines 26-29)
+- The separate `authHeader` variable check
 
-No styling, backend, or structural changes.
+**Simplify to:**
+- Create the Supabase client by forwarding `req.headers.get("Authorization")` directly (not "parsing" it -- just passing it through)
+- Call `supabase.auth.getUser()` as the sole authentication gate
+- If no user or error, return 401 with `{ error: "Unauthorized" }`
+
+Since `verify_jwt = true` is already set in config.toml, the gateway pre-validates the JWT. The `getUser()` call then retrieves the full user object.
 
 ### Technical Detail
 
-Replace the button's `onClick` async handler body with:
+Replace lines 25-44 with:
 
 ```typescript
-setIsContributing(true);
-try {
-  const payload = { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) };
-  console.log("[Contribute] trip.id:", tripId);
-  console.log("[Contribute] contributionAmount:", contributionAmount);
-  console.log("[Contribute] payload:", payload);
+// ---- 1. Authenticate via Supabase auth context ----
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+  { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
+);
 
-  const { data, error } = await supabase.functions.invoke("create-checkout", { body: payload });
+const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  console.log("[Contribute] full response data:", data);
-  console.log("[Contribute] full response error:", error);
-
-  if (error) throw error;
-
-  if (data?.url) {
-    console.log("[Contribute] redirecting to:", data.url);
-    window.open(data.url, "_blank");
-  } else {
-    console.error("[Contribute] no url in response, full data:", data);
-  }
-} catch (err: any) {
-  console.error("[Contribute] caught error object:", err);
-  toast({ title: "Contribution failed", description: err.message, variant: "destructive" });
-} finally {
-  setIsContributing(false);
+if (authError || !user) {
+  return _json({ error: "Unauthorized" }, 401);
 }
 ```
+
+Everything else (body parsing, membership check, funding check, Stripe logic, response) stays identical.
 
 ### Files Modified
 | File | Change |
 |------|--------|
-| `src/components/tabs/FundTab.tsx` | Add debug console.log statements to Contribute button handler |
+| `supabase/functions/create-checkout/index.ts` | Remove manual auth header check, simplify to `getUser()` as sole auth gate |
 
+No frontend changes. No config.toml changes. No Stripe logic changes.
