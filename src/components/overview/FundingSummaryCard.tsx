@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { CreditCard, Loader2, Clock } from "lucide-react";
 import { format } from "date-fns";
@@ -123,6 +124,21 @@ const FundingSummaryCard = ({
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Public Progress Bar */}
+      <Card className="border-0 shadow-sm glass-card">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Trip Funding Progress</span>
+            <span className="font-semibold text-primary">{pctFunded}%</span>
+          </div>
+          <Progress value={pctFunded} className="h-3 rounded-full" />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>${totalFunded.toLocaleString()} funded</span>
+            <span>${Math.max(0, totalRemaining).toLocaleString()} remaining</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Group Funding List */}
       <Card className="border-0 shadow-sm glass-card">

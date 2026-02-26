@@ -53,6 +53,13 @@ export type Database = {
             foreignKeyName: "bookings_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "bookings_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -84,6 +91,13 @@ export type Database = {
           trip_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "budget_categories_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "budget_categories_trip_id_fkey"
             columns: ["trip_id"]
@@ -122,6 +136,13 @@ export type Database = {
           trip_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "itinerary_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "itinerary_items_trip_id_fkey"
             columns: ["trip_id"]
@@ -167,6 +188,13 @@ export type Database = {
             foreignKeyName: "notifications_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "notifications_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -201,6 +229,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "outfit_posts_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "outfit_posts_trip_id_fkey"
             columns: ["trip_id"]
@@ -278,6 +313,13 @@ export type Database = {
             foreignKeyName: "packing_items_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "packing_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -312,6 +354,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_history_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "payment_history_trip_id_fkey"
             columns: ["trip_id"]
@@ -362,6 +411,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "payments_trip_id_fkey"
             columns: ["trip_id"]
@@ -427,6 +483,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "trip_members_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "trip_members_trip_id_fkey"
             columns: ["trip_id"]
@@ -513,6 +576,21 @@ export type Database = {
       }
     }
     Views: {
+      trip_funding_summary: {
+        Row: {
+          days_to_deadline: number | null
+          member_count: number | null
+          payment_deadline: string | null
+          per_person_cost: number | null
+          percent_funded: number | null
+          total_cost: number | null
+          total_funded: number | null
+          total_remaining: number | null
+          trip_id: string | null
+          trip_name: string | null
+        }
+        Relationships: []
+      }
       trip_member_funding: {
         Row: {
           amount_paid: number | null
@@ -526,6 +604,13 @@ export type Database = {
           user_id: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "trip_members_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
           {
             foreignKeyName: "trip_members_trip_id_fkey"
             columns: ["trip_id"]
