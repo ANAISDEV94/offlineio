@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Share2, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Share2, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import OverviewTab from "@/components/tabs/OverviewTab";
 import FundTab from "@/components/tabs/FundTab";
 import PlanTab from "@/components/tabs/PlanTab";
-import UnlockTab from "@/components/tabs/UnlockTab";
 import HypeTab from "@/components/tabs/HypeTab";
 
 const TripDashboard = () => {
@@ -109,9 +108,7 @@ const TripDashboard = () => {
   return (
     <div className="min-h-screen bg-background pb-4">
       {/* Header */}
-      <div
-        className="relative bg-primary/5 px-4 pt-4 pb-6 overflow-hidden"
-      >
+      <div className="relative bg-primary/5 px-4 pt-4 pb-6 overflow-hidden">
         {isPublic && trip.cover_image_url && (
           <>
             <img src={trip.cover_image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -126,11 +123,17 @@ const TripDashboard = () => {
               </button>
               <h1 className="text-lg font-display font-semibold text-foreground">{trip.name}</h1>
             </div>
-            {isPublic && isHost && (
-              <Button variant="outline" size="sm" onClick={handleShare} className="rounded-xl text-xs gap-1.5">
-                <Share2 className="h-3.5 w-3.5" /> Share
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* No-Drama Mode Badge */}
+              <Badge className="text-[10px] bg-accent/20 text-accent border-0 gap-1">
+                <ShieldCheck className="h-3 w-3" /> No-Drama
+              </Badge>
+              {isPublic && isHost && (
+                <Button variant="outline" size="sm" onClick={handleShare} className="rounded-xl text-xs gap-1.5">
+                  <Share2 className="h-3.5 w-3.5" /> Share
+                </Button>
+              )}
+            </div>
           </div>
 
           <motion.div
@@ -174,13 +177,12 @@ const TripDashboard = () => {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* 4-Tab Layout */}
       <Tabs defaultValue="overview" className="px-2 mt-2">
         <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
           <TabsTrigger value="overview" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📊 Overview</TabsTrigger>
           <TabsTrigger value="fund" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
           <TabsTrigger value="plan" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📋 Plan</TabsTrigger>
-          <TabsTrigger value="unlock" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🔓 Unlock</TabsTrigger>
           <TabsTrigger value="hype" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">🎉 Hype</TabsTrigger>
         </TabsList>
 
@@ -188,7 +190,6 @@ const TripDashboard = () => {
           <TabsContent value="overview"><OverviewTab tripId={tripId!} /></TabsContent>
           <TabsContent value="fund"><FundTab tripId={tripId!} /></TabsContent>
           <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="unlock"><UnlockTab tripId={tripId!} /></TabsContent>
           <TabsContent value="hype"><HypeTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>

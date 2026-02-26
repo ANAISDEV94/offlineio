@@ -2,22 +2,23 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTripRole } from "@/hooks/useTripRole";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Package, Shield, LogOut, Settings, Pencil, Check, X, Bell } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Shield, LogOut, Settings, Pencil, Check, X, Bell } from "lucide-react";
 import { format } from "date-fns";
-import InviteCodeCard from "@/components/overview/InviteCodeCard";
 import TripDetailsCard from "@/components/overview/TripDetailsCard";
-import BudgetAlertCard from "@/components/overview/BudgetAlertCard";
-import PaymentDeadlineCard from "@/components/overview/PaymentDeadlineCard";
+import InviteCodeCard from "@/components/overview/InviteCodeCard";
 import MembersCard from "@/components/overview/MembersCard";
-import FundingSummaryCard from "@/components/overview/FundingSummaryCard";
+import TripHealthCard from "@/components/overview/TripHealthCard";
+import PersonalStatusCard from "@/components/overview/PersonalStatusCard";
+import SystemRulesCard from "@/components/overview/SystemRulesCard";
 import ReplanChat from "@/components/ReplanChat";
-import { computeMemberStatus } from "@/lib/funding-utils";
+import { computeMemberStatus, computeTripHealth } from "@/lib/funding-utils";
 
 interface OverviewTabProps {
   tripId: string;
@@ -25,6 +26,7 @@ interface OverviewTabProps {
 
 const OverviewTab = ({ tripId }: OverviewTabProps) => {
   const { user, signOut } = useAuth();
+  const { isOrganizer } = useTripRole(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [replanOpen, setReplanOpen] = useState(false);
@@ -76,16 +78,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
     enabled: !!tripId && !!user?.id,
   });
 
-  const { data: myMembership } = useQuery({
-    queryKey: ["my-membership", tripId, user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("trip_members").select("role").eq("trip_id", tripId).eq("user_id", user!.id).maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tripId && !!user?.id,
-  });
-
   const { data: myProfile } = useQuery({
     queryKey: ["my-profile", user?.id],
     queryFn: async () => {
@@ -94,24 +86,6 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       return data;
     },
     enabled: !!user?.id,
-  });
-
-  const { data: packingItems = [] } = useQuery({
-    queryKey: ["my-packing-overview", tripId, user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("packing_items").select("*").eq("trip_id", tripId).eq("user_id", user!.id).order("created_at");
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tripId && !!user?.id,
-  });
-
-  const togglePacking = useMutation({
-    mutationFn: async ({ id, checked }: { id: string; checked: boolean }) => {
-      const { error } = await supabase.from("packing_items").update({ is_checked: checked }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-packing-overview", tripId] }),
   });
 
   const updateDisplayName = useMutation({
@@ -130,43 +104,29 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
 
   if (!trip) return null;
 
-  const isOrganizer = members.some((m) => m.user_id === user?.id && m.role === "organizer");
   const daysUntil = Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-  // Funding calculations using total_cost
-  const totalCost = Number((trip as any).total_cost) || payments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalCost = Number((trip as any).total_cost) || 0;
   const memberCount = members.length || 1;
   const perPersonCost = totalCost / memberCount;
   const totalFunded = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
-  const totalRemaining = totalCost - totalFunded;
-  const fundingPct = totalCost > 0 ? Math.round((totalFunded / totalCost) * 100) : 0;
+  const pctFunded = totalCost > 0 ? Math.round((totalFunded / totalCost) * 100) : 0;
 
   const deadlineDays = trip.payment_deadline
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
-  // Build member funding list
-  const memberFunding = members.map((m) => {
-    const payment = payments.find((p) => p.user_id === m.user_id);
-    const paid = payment ? Number(payment.amount_paid) : 0;
-    const pct = perPersonCost > 0 ? Math.round((paid / perPersonCost) * 100) : 0;
-    return {
-      userId: m.user_id,
-      displayName: m.profile?.display_name || "Unknown",
-      amountPaid: paid,
-      perPersonCost,
-      status: computeMemberStatus(paid, perPersonCost, deadlineDays),
-      pctComplete: Math.min(100, pct),
-    };
-  });
-
   const myPaid = myPayment ? Number(myPayment.amount_paid) : 0;
   const myRemaining = Math.max(0, perPersonCost - myPaid);
+  const myStatus = computeMemberStatus(myPaid, perPersonCost, deadlineDays);
 
-  const shortfall = totalRemaining;
-  const showBudgetAlert = fundingPct < 100 && daysUntil <= 90 && daysUntil > 0 && shortfall > 0;
-
-  const packedCount = packingItems.filter((i) => i.is_checked).length;
+  // Trip Health
+  const lateCount = payments.filter((p) => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "Behind").length;
+  const onTrackCount = payments.filter((p) => {
+    const s = computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays);
+    return s === "Paid" || s === "On Track";
+  }).length;
+  const pctOnTrack = payments.length > 0 ? (onTrackCount / payments.length) * 100 : 100;
+  const health = computeTripHealth(pctFunded, pctOnTrack, deadlineDays, lateCount, payments.length);
 
   const handleRemoveMember = async (memberId: string) => {
     const { error } = await supabase.from("trip_members").delete().eq("id", memberId);
@@ -211,41 +171,44 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
     }
   };
 
-  const tripContext = {
-    destination: trip.destination, startDate: trip.start_date, endDate: trip.end_date,
-    memberCount: members.length, originalPerPerson: perPersonCost,
-    originalTotal: totalCost, collectedTotal: totalFunded, shortfall, vibe: trip.vibe,
-  };
-
   return (
     <div className="space-y-4">
-      {/* Funding Summary — first thing user sees */}
-      <FundingSummaryCard
-        tripId={tripId}
-        tripName={trip.name}
-        totalCost={totalCost}
-        memberCount={memberCount}
-        totalFunded={totalFunded}
-        paymentDeadline={trip.payment_deadline}
-        members={memberFunding}
-        myPaid={myPaid}
-        myRemaining={myRemaining}
-        userId={user?.id}
-        hasPaymentRecord={!!myPayment}
+      {/* 1. Trip Health */}
+      <TripHealthCard
+        score={health.score}
+        status={health.status}
+        color={health.color}
+        daysUntilTrip={daysUntil}
+        deadlineDays={deadlineDays}
       />
 
-      <TripDetailsCard trip={trip} />
-      <InviteCodeCard inviteCode={trip.invite_code} />
+      {/* 2. Your Status */}
+      <PersonalStatusCard
+        perPersonCost={perPersonCost}
+        amountPaid={myPaid}
+        remaining={myRemaining}
+        paymentDeadline={trip.payment_deadline}
+        status={myStatus}
+      />
 
-      {showBudgetAlert && (
-        <BudgetAlertCard shortfall={shortfall} totalPaid={totalFunded} onReplan={() => setReplanOpen(true)} />
-      )}
+      {/* 3. Group Status */}
+      <Card className="rounded-2xl border-0 shadow-sm glass-card">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Group Funding</p>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Total funded</span>
+            <span className="font-semibold text-primary">{pctFunded}%</span>
+          </div>
+          <Progress value={pctFunded} className="h-2 rounded-full" />
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            <span>{payments.filter(p => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "Paid").length} Paid</span>
+            <span>{payments.filter(p => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "On Track").length} On Track</span>
+            <span>{lateCount} Behind</span>
+          </div>
+        </CardContent>
+      </Card>
 
-      {trip.payment_deadline && deadlineDays !== null && (
-        <PaymentDeadlineCard paymentDeadline={trip.payment_deadline} paymentDeadlineDays={deadlineDays} />
-      )}
-
-      {/* Deadline Reminders */}
+      {/* Deadline Reminder */}
       {myRemaining > 0 && deadlineDays !== null && deadlineDays > 0 && deadlineDays <= 14 && (
         <Card className="rounded-2xl border-0 bg-primary/5 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -268,6 +231,11 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
         </Card>
       )}
 
+      {/* 4. Trip Details */}
+      <TripDetailsCard trip={trip} />
+      <InviteCodeCard inviteCode={trip.invite_code} />
+
+      {/* 5. Members */}
       <MembersCard
         members={members} payments={payments} isOrganizer={isOrganizer}
         currentUserId={user?.id} onRemoveMember={handleRemoveMember}
@@ -275,47 +243,10 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
         maxSpots={trip.max_spots || trip.group_size}
       />
 
-      {/* My Role */}
-      <Card className="rounded-2xl border-0 bg-primary/5 shadow-sm">
-        <CardContent className="p-4 flex items-center gap-3">
-          <Shield className="h-5 w-5 text-primary" />
-          <div>
-            <p className="text-sm font-medium text-foreground">My Role</p>
-            <p className="text-xs text-muted-foreground capitalize">{myMembership?.role || "Member"}</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* 6. System Rules */}
+      <SystemRulesCard />
 
-      {/* My Packing List */}
-      <Card className="rounded-2xl border-0 bg-card shadow-sm">
-        <CardHeader className="p-4 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-              <Package className="h-3.5 w-3.5 text-primary" /> My Packing List
-            </CardTitle>
-            {packingItems.length > 0 && (
-              <span className="text-[10px] text-muted-foreground">{packedCount}/{packingItems.length} packed</span>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          {packingItems.length > 0 ? (
-            <div className="space-y-2">
-              {packingItems.map((item) => (
-                <label key={item.id} className="flex items-center gap-2.5 py-1 cursor-pointer">
-                  <Checkbox checked={item.is_checked} onCheckedChange={(checked) => togglePacking.mutate({ id: item.id, checked: !!checked })} />
-                  <span className={`text-sm ${item.is_checked ? "line-through text-muted-foreground" : "text-foreground"}`}>{item.item_name}</span>
-                  {item.is_suggested && <Badge variant="outline" className="text-[9px] ml-auto">Suggested</Badge>}
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">No packing items yet. Add some in the Hype tab!</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Settings */}
+      {/* 7. Settings */}
       <Card className="rounded-2xl border-0 bg-card shadow-sm">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-1.5">
@@ -352,7 +283,11 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
         </CardContent>
       </Card>
 
-      <ReplanChat open={replanOpen} onOpenChange={setReplanOpen} tripContext={tripContext} />
+      <ReplanChat open={replanOpen} onOpenChange={setReplanOpen} tripContext={{
+        destination: trip.destination, startDate: trip.start_date, endDate: trip.end_date,
+        memberCount: members.length, originalPerPerson: perPersonCost,
+        originalTotal: totalCost, collectedTotal: totalFunded, shortfall: totalCost - totalFunded, vibe: trip.vibe,
+      }} />
     </div>
   );
 };

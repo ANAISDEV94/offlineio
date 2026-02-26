@@ -8,8 +8,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTripRole } from "@/hooks/useTripRole";
 import { motion } from "framer-motion";
-import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check } from "lucide-react";
+import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check, Lock, Plane, Home, Sparkles, DollarSign, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PlanTabProps {
@@ -29,22 +30,28 @@ const formatTime = (time: string | null) => {
   }
 };
 
+const BOOKING_CATEGORIES = [
+  { key: "flights", label: "Flights", icon: Plane, emoji: "✈️" },
+  { key: "stay", label: "Stay", icon: Home, emoji: "🏠" },
+  { key: "experiences", label: "Experiences", icon: Sparkles, emoji: "✨" },
+  { key: "shared", label: "Shared Costs", icon: DollarSign, emoji: "💰" },
+  { key: "buffer", label: "Buffer", icon: ShieldCheck, emoji: "🛡️" },
+];
+
 const PlanTab = ({ tripId }: PlanTabProps) => {
   const { user } = useAuth();
+  const { isOrganizer } = useTripRole(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [newActivity, setNewActivity] = useState("");
-  const [newDay, setNewDay] = useState(1);
-  const [newTime, setNewTime] = useState("");
   const [hostControlsOpen, setHostControlsOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
+  const [newBooking, setNewBooking] = useState({ title: "", price: "", category: "flights", notes: "" });
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ activity: "", time: "", notes: "" });
-  const [editingBudget, setEditingBudget] = useState<string | null>(null);
-  const [budgetEditForm, setBudgetEditForm] = useState({ name: "", amount: "", spent: "" });
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatAmount, setNewCatAmount] = useState("");
+  const [newActivity, setNewActivity] = useState("");
+  const [newDay, setNewDay] = useState(1);
+  const [newTime, setNewTime] = useState("");
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
@@ -55,13 +62,19 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
   });
 
-  const isHost = user?.id === trip?.created_by;
-  const isPublicTrip = trip?.visibility === "public";
-
-  const { data: budgetCategories = [], isLoading: budgetLoading } = useQuery({
-    queryKey: ["budget-categories", tripId],
+  const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
+    queryKey: ["bookings", tripId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("budget_categories").select("*").eq("trip_id", tripId).order("name");
+      const { data, error } = await supabase.from("bookings").select("*").eq("trip_id", tripId).order("created_at");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: fundingSummary } = useQuery({
+    queryKey: ["trip-funding-summary", tripId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("trip_funding_summary").select("*").eq("trip_id", tripId).maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -90,7 +103,52 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         payment: payments?.find(p => p.user_id === m.user_id),
       }));
     },
-    enabled: isHost && isPublicTrip,
+    enabled: isOrganizer,
+  });
+
+  const pctFunded = Number(fundingSummary?.percent_funded) || 0;
+  const isFullyFunded = pctFunded >= 100;
+
+  // Mutations
+  const addBooking = useMutation({
+    mutationFn: async () => {
+      if (!newBooking.title.trim() || !user) return;
+      const price = Number(newBooking.price) || null;
+      const { error } = await supabase.from("bookings").insert({
+        trip_id: tripId, title: newBooking.title.trim(), category: newBooking.category,
+        price, notes: newBooking.notes || null, created_by: user.id,
+      });
+      if (error) throw error;
+      // Auto-update total_cost if price was provided
+      if (price && price > 0) {
+        const currentTotal = Number(trip?.total_cost) || 0;
+        await supabase.from("trips").update({ total_cost: currentTotal + price } as any).eq("id", tripId);
+        queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+      setNewBooking({ title: "", price: "", category: "flights", notes: "" });
+      toast({ title: "Booking added" });
+    },
+  });
+
+  const deleteBooking = useMutation({
+    mutationFn: async (booking: { id: string; price: number | null }) => {
+      const { error } = await supabase.from("bookings").delete().eq("id", booking.id);
+      if (error) throw error;
+      if (booking.price && booking.price > 0) {
+        const currentTotal = Number(trip?.total_cost) || 0;
+        await supabase.from("trips").update({ total_cost: Math.max(0, currentTotal - booking.price) } as any).eq("id", tripId);
+        queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
+      toast({ title: "Booking removed" });
+    },
   });
 
   const removeMember = useMutation({
@@ -138,7 +196,6 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       setNewActivity(""); setNewTime("");
       toast({ title: "Added to itinerary" });
     },
-    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const deleteItem = useMutation({
@@ -163,62 +220,41 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
   });
 
-  const addBudgetCategory = useMutation({
-    mutationFn: async () => {
-      if (!newCatName.trim()) return;
-      const { error } = await supabase.from("budget_categories").insert({
-        trip_id: tripId, name: newCatName.trim(), amount: Number(newCatAmount) || 0,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] });
-      setNewCatName(""); setNewCatAmount("");
-      toast({ title: "Category added" });
-    },
-  });
-
-  const deleteBudgetCategory = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("budget_categories").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] }); toast({ title: "Category deleted" }); },
-  });
-
-  const updateBudgetCategory = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("budget_categories").update({
-        name: budgetEditForm.name, amount: Number(budgetEditForm.amount), spent: Number(budgetEditForm.spent),
-      }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] });
-      setEditingBudget(null);
-      toast({ title: "Category updated" });
-    },
-  });
-
-  const totalBudget = budgetCategories.reduce((s, b) => s + Number(b.amount), 0);
-  const totalSpent = budgetCategories.reduce((s, b) => s + Number(b.spent), 0);
+  if (bookingsLoading || itineraryLoading) {
+    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
 
   const days = itineraryItems.reduce<Record<number, typeof itineraryItems>>((acc, item) => {
     (acc[item.day_number] = acc[item.day_number] || []).push(item);
     return acc;
   }, {});
 
-  if (budgetLoading || itineraryLoading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-  }
+  const bookingsByCategory = BOOKING_CATEGORIES.map(cat => ({
+    ...cat,
+    items: bookings.filter(b => b.category === cat.key),
+    total: bookings.filter(b => b.category === cat.key).reduce((s, b) => s + (Number(b.price) || 0), 0),
+  }));
 
-  const totalGoal = memberPayments.reduce((s, m) => s + Number(m.payment?.amount || 0), 0);
-  const totalFunded = memberPayments.reduce((s, m) => s + Number(m.payment?.amount_paid || 0), 0);
-  const pctFunded = totalGoal > 0 ? Math.round((totalFunded / totalGoal) * 100) : 0;
+  const totalBookingCost = bookings.reduce((s, b) => s + (Number(b.price) || 0), 0);
 
   return (
-    <div className="space-y-8">
-      {isHost && isPublicTrip && (
+    <div className="space-y-6">
+      {/* Funding Gate */}
+      {!isFullyFunded && (
+        <Card className="border-0 shadow-sm bg-muted/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Lock className="h-5 w-5 text-muted-foreground" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Bookings unlock at 100% funded</p>
+              <Progress value={pctFunded} className="h-1.5 mt-1.5 rounded-full" />
+              <p className="text-[10px] text-muted-foreground mt-1">{Math.round(pctFunded)}% funded</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Host Controls */}
+      {isOrganizer && (
         <Collapsible open={hostControlsOpen} onOpenChange={setHostControlsOpen}>
           <CollapsibleTrigger asChild>
             <Card className="border-0 shadow-sm cursor-pointer bg-primary/5">
@@ -234,21 +270,10 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 mt-3">
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Trip Health</p>
-                    <p className="text-xs text-muted-foreground">{pctFunded}% funded</p>
-                  </div>
-                  <Badge variant={pctFunded >= 80 ? "default" : "secondary"} className="text-xs">
-                    {pctFunded >= 80 ? "On Track" : "Needs Attention"}
-                  </Badge>
-                </CardContent>
-              </Card>
-
+              {/* Members */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Participant Funding</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Members</p>
                   {memberPayments.map(m => {
                     const pct = m.payment && Number(m.payment.amount) > 0
                       ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100) : 0;
@@ -272,6 +297,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 </CardContent>
               </Card>
 
+              {/* Deadline */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adjust Deadline</p>
@@ -284,6 +310,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 </CardContent>
               </Card>
 
+              {/* Announcement */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Send Announcement</p>
@@ -300,95 +327,101 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </Collapsible>
       )}
 
-      {/* Budget Breakdown */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-display font-medium">Budget Breakdown</CardTitle>
-            {totalBudget > 0 && (
-              <p className="text-sm text-muted-foreground">
-                ${totalSpent.toLocaleString()} of ${totalBudget.toLocaleString()} spent
-              </p>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {budgetCategories.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-2">No budget categories yet</p>
-            ) : (
-              budgetCategories.map((b) => (
-                <div key={b.id}>
-                  {editingBudget === b.id ? (
-                    <div className="space-y-2 p-2 rounded-xl bg-muted/50">
-                      <Input value={budgetEditForm.name} onChange={e => setBudgetEditForm(p => ({ ...p, name: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Name" />
-                      <div className="flex gap-2">
-                        <Input type="number" value={budgetEditForm.amount} onChange={e => setBudgetEditForm(p => ({ ...p, amount: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" placeholder="Budget" />
-                        <Input type="number" value={budgetEditForm.spent} onChange={e => setBudgetEditForm(p => ({ ...p, spent: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" placeholder="Spent" />
+      {/* Bookings by Category */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What We're Booking</p>
+          {totalBookingCost > 0 && (
+            <p className="text-xs text-muted-foreground">${totalBookingCost.toLocaleString()} total</p>
+          )}
+        </div>
+
+        {bookingsByCategory.map(cat => (
+          <Card key={cat.key} className={`border-0 shadow-sm ${!isFullyFunded ? "opacity-75" : ""}`}>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{cat.emoji}</span>
+                  <p className="text-sm font-medium">{cat.label}</p>
+                </div>
+                {cat.total > 0 && <p className="text-xs text-muted-foreground">${cat.total.toLocaleString()}</p>}
+              </div>
+              {cat.items.length > 0 ? (
+                <div className="space-y-1.5">
+                  {cat.items.map(b => (
+                    <div key={b.id} className="flex items-center justify-between py-1 group">
+                      <div>
+                        <p className="text-sm">{b.title}</p>
+                        {b.notes && <p className="text-[10px] text-muted-foreground">{b.notes}</p>}
                       </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateBudgetCategory.mutate(b.id)}>
-                          <Check className="h-3 w-3 mr-1" /> Save
-                        </Button>
-                        <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingBudget(null)}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="group">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>{b.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">${Number(b.spent)} / ${Number(b.amount)}</span>
-                          <button onClick={() => { setEditingBudget(b.id); setBudgetEditForm({ name: b.name, amount: String(b.amount), spent: String(b.spent) }); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
-                          </button>
-                          <button onClick={() => deleteBudgetCategory.mutate(b.id)}
+                      <div className="flex items-center gap-2">
+                        {b.price && <p className="text-xs font-medium">${Number(b.price).toLocaleString()}</p>}
+                        {b.created_by === user?.id && (
+                          <button onClick={() => deleteBooking.mutate({ id: b.id, price: b.price })}
                             className="opacity-0 group-hover:opacity-100 transition-opacity">
                             <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                           </button>
-                        </div>
+                        )}
                       </div>
-                      <Progress value={Number(b.amount) > 0 ? (Number(b.spent) / Number(b.amount)) * 100 : 0} className="h-2" />
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))
-            )}
-            {/* Add new category */}
-            <div className="flex gap-2 pt-2 border-t border-border">
-              <Input placeholder="Category name" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="rounded-xl text-sm h-8 flex-1" />
-              <Input type="number" placeholder="Amount" value={newCatAmount} onChange={e => setNewCatAmount(e.target.value)} className="rounded-xl text-sm h-8 w-24" />
-              <Button size="sm" className="rounded-xl h-8" onClick={() => addBudgetCategory.mutate()} disabled={!newCatName.trim()}>
-                <Plus className="h-3.5 w-3.5" />
+              ) : (
+                <p className="text-xs text-muted-foreground">No bookings yet</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+
+        {/* Add Booking */}
+        {isOrganizer && (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm font-medium">Add Booking</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Title" value={newBooking.title} onChange={e => setNewBooking(p => ({ ...p, title: e.target.value }))} className="rounded-xl text-sm h-9" />
+                <Input type="number" placeholder="Price" value={newBooking.price} onChange={e => setNewBooking(p => ({ ...p, price: e.target.value }))} className="rounded-xl text-sm h-9" />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={newBooking.category}
+                  onChange={e => setNewBooking(p => ({ ...p, category: e.target.value }))}
+                  className="rounded-xl text-sm h-9 border border-input bg-background px-3 flex-1"
+                >
+                  {BOOKING_CATEGORIES.map(c => (
+                    <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
+                  ))}
+                </select>
+                <Button size="sm" className="rounded-xl h-9" onClick={() => addBooking.mutate()} disabled={!newBooking.title.trim()}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Itinerary */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Itinerary</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm font-medium">Add to Itinerary</p>
+            <div className="flex gap-2">
+              <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
+              <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-28" />
+              <Input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem.mutate()} className="rounded-xl flex-1" placeholder="Activity..." />
+              <Button onClick={() => addItem.mutate()} size="icon" className="rounded-xl shrink-0" disabled={addItem.isPending}>
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
           </CardContent>
         </Card>
-      </motion.div>
 
-      {/* Add to Itinerary */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4 space-y-3">
-          <p className="text-sm font-medium">Add to Itinerary</p>
-          <div className="flex gap-2">
-            <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
-            <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-28" />
-            <Input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem.mutate()} className="rounded-xl flex-1" placeholder="Activity..." />
-            <Button onClick={() => addItem.mutate()} size="icon" className="rounded-xl shrink-0" disabled={addItem.isPending}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Day-by-Day Itinerary */}
-      {Object.keys(days).length > 0 ? (
-        <div>
-          <h3 className="font-display font-medium text-lg mb-3">Day-by-Day Itinerary</h3>
+        {Object.keys(days).length > 0 ? (
           <div className="space-y-4">
             {Object.entries(days).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
-              <motion.div key={day} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Number(day) * 0.1 }}>
+              <motion.div key={day} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <Card className="border-0 shadow-sm">
                   <CardHeader className="pb-2"><CardTitle className="text-base font-display font-medium">Day {day}</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
@@ -434,13 +467,13 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
               </motion.div>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-3xl mb-2">📋</p>
-          <p className="text-sm text-muted-foreground">No itinerary items yet. Add your first activity above.</p>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-3xl mb-2">📋</p>
+            <p className="text-sm text-muted-foreground">No itinerary items yet. Add your first activity above.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
