@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
 import { Loader2, Shield, Users, CreditCard, CalendarDays, Clock, History } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, addWeeks } from "date-fns";
 import { computeMemberStatus } from "@/lib/funding-utils";
@@ -24,6 +25,8 @@ const FundTab = ({ tripId }: FundTabProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [noDrama, setNoDrama] = useState(false);
+  const [contributionAmount, setContributionAmount] = useState<string>("");
+  const [isContributing, setIsContributing] = useState(false);
   const [payingAmount, setPayingAmount] = useState<string | null>(null);
   const [customPayments, setCustomPayments] = useState("4");
 
@@ -208,6 +211,50 @@ const FundTab = ({ tripId }: FundTabProps) => {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Contribution Section */}
+      <Card className="border-0 shadow-sm glass-card">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            <p className="text-sm font-medium">Contribute</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="contribution-amount" className="text-xs">Contribution Amount (USD)</Label>
+            <Input
+              id="contribution-amount"
+              type="number"
+              min="1"
+              placeholder="0.00"
+              value={contributionAmount}
+              onChange={(e) => setContributionAmount(e.target.value)}
+              className="rounded-xl"
+            />
+          </div>
+          <Button
+            className="w-full rounded-xl gap-1.5"
+            disabled={!contributionAmount || Number(contributionAmount) <= 0 || isContributing}
+            onClick={async () => {
+              setIsContributing(true);
+              try {
+                const { data, error } = await supabase.functions.invoke("create-checkout", {
+                  body: { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) },
+                });
+                if (error) throw error;
+                if (data?.url) window.open(data.url, "_blank");
+              } catch (err: any) {
+                console.error("Contribution error:", err);
+                toast({ title: "Contribution failed", description: err.message, variant: "destructive" });
+              } finally {
+                setIsContributing(false);
+              }
+            }}
+          >
+            {isContributing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+            Contribute
+          </Button>
+        </CardContent>
+      </Card>
 
       {isPublic && minSpotsRequired && (
         <Card className="border-0 shadow-sm glass-card">
