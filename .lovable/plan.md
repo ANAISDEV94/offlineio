@@ -1,116 +1,86 @@
 
 
-## Plan: Stabilize Stripe Contribution Flow (5 Phases)
+## Plan: Fix 401 on create-checkout, Set Webhook Secret, Stabilize Stripe Flow
 
-### PHASE 1 — Enhanced Debug Logging (No Logic Changes)
+### Root Cause of 401
+`supabase/config.toml` line 10 has `verify_jwt = true` for `create-checkout`. This means the Supabase gateway rejects requests before the function code ever runs. The function already validates JWTs manually via `getClaims()`, so the gateway check is redundant and broken (signing-keys issue).
 
-**`src/main.tsx`** — Replace existing boot logs with richer diagnostics:
-- Log `VITE_SUPABASE_URL`
-- Extract and log the project ref from the URL (e.g. `seruyblflufhgandrxsf`)
-- Check `supabase.auth.getSession()` and log whether a session exists
-- Log first 12 chars of access_token if present
+### Changes
 
-**`src/components/tabs/FundTab.tsx`** (Contribute button, ~line 237) — Before invoking, add:
-- Log session exists (true/false) by calling `supabase.auth.getSession()`
-- Log function name being invoked
-- On catch, log the full error object with `JSON.stringify`
+**A) Set STRIPE_WEBHOOK_SECRET**
+- Use the `add_secret` tool to set `STRIPE_WEBHOOK_SECRET` = `whsec_PkTZKJo5e68odz10Jda2LYqT4DZxvOz9`
+- Verify `STRIPE_SECRET_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` are already present (they are, per the secrets list)
 
-**`src/components/overview/FundingSummaryCard.tsx`** (handlePay, ~line 60) — Same logging pattern before its `supabase.functions.invoke` call.
+**B) Fix config.toml — the 401 fix**
+Change `create-checkout` from `verify_jwt = true` to `verify_jwt = false`. The function already does manual JWT validation via `getClaims()`, so this is safe and correct per the signing-keys architecture.
 
-Redeploy both edge functions (no code changes to them yet).
+| Line | Before | After |
+|------|--------|-------|
+| 10 | `verify_jwt = true` | `verify_jwt = false` |
 
----
+**C) Fix FundTab.tsx `handlePay` (line 142-157)**
+The `handlePay` function (used by the installment "Pay" buttons) does NOT pass an Authorization header and does NOT check for a session. It needs the same session gate and explicit header that the Contribute button already has.
 
-### PHASE 2 — Disable JWT + Validate Env Vars
-
-**`supabase/config.toml`** — Change `create-checkout` to `verify_jwt = false` (stripe-webhook already false).
-
-**`supabase/functions/create-checkout/index.ts`** — At the top of the handler (before auth):
-- Log whether `STRIPE_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` exist
-- If `STRIPE_SECRET_KEY` is missing, return `{ error: "STRIPE_SECRET_KEY not configured" }` with 500
-- Keep existing auth code but wrap it: if auth fails, log warning but continue (temporarily allow unauthenticated to isolate Stripe vs auth)
-
-Also fix the `stripe-webhook` import from `npm:@supabase/supabase-js` to `https://esm.sh/@supabase/supabase-js@2.57.2` for Deno compatibility.
-
-**Frontend** — Change `window.open(data.url, "_blank")` to `window.location.href = data.url` in both FundTab and FundingSummaryCard for more reliable redirect.
-
-Redeploy both functions.
-
----
-
-### PHASE 3 — Re-enable Proper Auth
-
-**`supabase/config.toml`** — Set `create-checkout` back to `verify_jwt = false` (per the signing-keys guidance, we validate in code instead).
-
-**`supabase/functions/create-checkout/index.ts`** — Use `getClaims()` for JWT validation:
 ```typescript
-const authHeader = req.headers.get("Authorization");
-if (!authHeader?.startsWith("Bearer ")) {
-  return _json({ error: "not_authenticated" }, 401);
-}
-const token = authHeader.replace("Bearer ", "");
-const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token);
-if (claimsErr || !claimsData?.claims) {
-  return _json({ error: "not_authenticated" }, 401);
-}
-const userId = claimsData.claims.sub;
-```
-
-**`src/components/tabs/FundTab.tsx`** — Before invoke:
-- Check `supabase.auth.getSession()`
-- If no session, show toast "Please sign in to contribute" and return early
-- Pass explicit Authorization header:
-```typescript
-const { data: { session } } = await supabase.auth.getSession();
-if (!session) { toast({ title: "Please sign in to contribute" }); return; }
+// Before (line 146-149):
 const { data, error } = await supabase.functions.invoke("create-checkout", {
-  body: payload,
+  body: { trip_id: tripId, amount_cents: amountCents },
+});
+
+// After:
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) {
+  toast({ title: "Please sign in to contribute", variant: "destructive" });
+  setPayingAmount(null);
+  return;
+}
+const { data, error } = await supabase.functions.invoke("create-checkout", {
+  body: { trip_id: tripId, amount_cents: amountCents },
   headers: { Authorization: `Bearer ${session.access_token}` },
 });
 ```
 
-**`src/components/overview/FundingSummaryCard.tsx`** — Same session check and explicit header pattern.
+Also change `window.open(data.url, "_blank")` to `window.location.href = data.url` for reliable redirect (line 151).
 
-Redeploy.
+**D) Add diagnostic logs to create-checkout edge function**
+Add logs for:
+- Whether Authorization header exists
+- Whether user resolved successfully
+- The resolved userId and trip_id
 
----
+(Most of these logs already exist in the current code -- just need to add one for "Authorization header present" at the top.)
 
-### PHASE 4 — Webhook Validation
+**E) Verify stripe-webhook implementation**
+The current implementation already:
+- Reads `STRIPE_WEBHOOK_SECRET` from `Deno.env.get()`
+- Verifies signature via `stripe.webhooks.constructEvent()`
+- Returns 200 on success, 400 on signature failure
+- Logs event type on success
 
-**`supabase/functions/stripe-webhook/index.ts`** — Already validates signature. Changes:
-- Fix import to use `https://esm.sh/` instead of `npm:`
-- Add CORS headers that include `stripe-signature` (already present)
-- Add startup log confirming `STRIPE_WEBHOOK_SECRET` is set
-- Log event type on successful verification
+Add one additional log: log `event.type` after successful signature verification.
 
-Note: The user must confirm in Stripe Dashboard that the webhook URL is:
-`https://seruyblflufhgandrxsf.supabase.co/functions/v1/stripe-webhook`
-and that `checkout.session.completed` event is enabled.
-
-The `STRIPE_WEBHOOK_SECRET` secret already exists in the project.
-
----
-
-### PHASE 5 — Cleanup
-
-Remove temporary debug logs from Phase 1 (keep only essential error logging).
-Verify final behavior matches:
-- No session → toast asking to sign in
-- With session → Stripe Checkout opens via redirect
-- Successful payment → webhook records in DB
-- UI reflects updated amounts
-
----
+**F) Redeploy both functions**
 
 ### Files Modified
 
-| File | Phases | Summary |
-|------|--------|---------|
-| `src/main.tsx` | 1, 5 | Boot diagnostics with session check |
-| `src/components/tabs/FundTab.tsx` | 1, 2, 3, 5 | Debug logs, redirect fix, session gate + explicit auth header |
-| `src/components/overview/FundingSummaryCard.tsx` | 1, 2, 3, 5 | Same as FundTab |
-| `supabase/config.toml` | 2, 3 | Temporarily toggle verify_jwt, settle on false (validate in code) |
-| `supabase/functions/create-checkout/index.ts` | 2, 3 | Env var checks, switch to getClaims() auth |
-| `supabase/functions/stripe-webhook/index.ts` | 4 | Fix npm import, add startup log |
+| File | Change |
+|------|--------|
+| `supabase/config.toml` | `create-checkout` verify_jwt: true -> false |
+| `src/components/tabs/FundTab.tsx` | Add session gate + auth header to `handlePay`, fix redirect |
+| `supabase/functions/create-checkout/index.ts` | Add "Authorization header present" log |
+| `supabase/functions/stripe-webhook/index.ts` | Add event.type log after signature verification |
 
-No UI styling changes. No database changes. No project ref changes.
+### How to Verify After Deploy
+
+1. **View backend function logs**: Open Lovable Cloud backend to see logs for each function invocation
+2. **Test Contribute button**: Sign in, go to a trip, enter an amount, click Contribute. You should see Stripe Checkout open (no 401)
+3. **Test webhook**: In Stripe Dashboard > Developers > Webhooks, click on the endpoint, then "Send test webhook" with event `checkout.session.completed`. You should see a 200 response
+4. **Expected console logs on Contribute**:
+   - `[Contribute] session exists = true`
+   - `[Contribute] function = create-checkout`
+   - `[Contribute] response data: { url: "https://checkout.stripe.com/..." }`
+5. **Expected edge function logs**:
+   - `[create-checkout] Authorization header present: true`
+   - `[create-checkout] authenticated userId: <uuid>`
+   - `[create-checkout] Stripe session created: cs_...`
+
