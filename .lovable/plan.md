@@ -1,77 +1,45 @@
 
 
-# Replace Hype Tab with Settings Tab + Enhance Overview Payment Visibility
+# Add Payment Details Section to Settings Tab
 
-## Summary
+## What This Does
+Adds a private "Payment Details" card to the Settings tab where each user can view and manage their saved payment method (card info, billing name). For now this uses mock/manually-entered details stored securely in the database, with the card number masked for display.
 
-Three changes requested:
-1. **Organizer can edit the total amount due** -- already exists in the Fund tab but needs to be more prominent and also accessible from the Overview tab
-2. **Replace Hype tab with a full Settings/Profile tab** -- covering display name, email, password change, sign out, and payment history
-3. **Overview dashboard shows who has paid and who hasn't** -- add a visible member payment status list directly in the Overview tab
+## Database Change
 
----
+**New table: `user_payment_methods`**
+- `id` (uuid, PK)
+- `user_id` (uuid, not null, unique) -- one payment method per user for now
+- `card_brand` (text) -- e.g. "Visa", "Mastercard"
+- `card_last_four` (text) -- last 4 digits only, never store full card number
+- `card_exp_month` (int)
+- `card_exp_year` (int)
+- `billing_name` (text)
+- `created_at`, `updated_at` (timestamps)
 
-## Change 1: Enhance Organizer "Edit Trip Total" Visibility
+**RLS policies** (strict, user-only):
+- SELECT: `auth.uid() = user_id`
+- INSERT: `auth.uid() = user_id`
+- UPDATE: `auth.uid() = user_id`
+- DELETE: `auth.uid() = user_id`
 
-**File: `src/components/tabs/OverviewTab.tsx`**
-- Add an inline "Edit Trip Total" card (organizer-only) in the Overview tab, between Trip Health and Personal Status cards
-- Uses the same pattern already in FundTab: pencil icon to toggle edit mode, input field, save/cancel buttons
-- On save, updates `trips.total_cost` and invalidates funding queries
+This ensures payment details are completely private per user.
 
-**File: `src/components/tabs/FundTab.tsx`**
-- Move the organizer "Edit Trip Total" card from the middle of Group Funding section to the very top of the Fund tab (above "Your Responsibility") so it's the first thing the organizer sees
+## Frontend Change
 
----
+**`src/components/tabs/SettingsTab.tsx`** -- Add a new "Payment Details" card between the Security and Payment History sections:
 
-## Change 2: Replace Hype Tab with Settings/Profile Tab
+1. **Display mode**: Shows saved card as "Visa ending in 4242, Exp 03/27, Billing: John Doe" with an Edit button
+2. **Edit mode**: Form fields for card brand (dropdown: Visa/Mastercard/Amex/Discover), last 4 digits, expiration month/year, and billing name
+3. **Empty state**: "No payment method on file" with an "Add Payment Method" button
+4. Queries `user_payment_methods` for the current user; upserts on save
 
-**File: `src/components/tabs/SettingsTab.tsx`** (NEW)
-- Full user profile and account management tab containing:
-  1. **Profile Section**: Display name (editable), email (read-only, from `user.email`), avatar
-  2. **Security Section**: Change password (calls `supabase.auth.updateUser({ password })`), with current password not required by Supabase for logged-in users
-  3. **Payment Information**: Personal payment history log (from `payment_history` table)
-  4. **Account Actions**: Sign out button
-- All data comes from existing `profiles` table and `auth.user` object -- no new tables needed
-
-**File: `src/pages/TripDashboard.tsx`**
-- Replace `HypeTab` import with `SettingsTab` import
-- Rename the 4th tab from "Hype" to "Settings" with a gear icon
-- Tab values: overview, fund, plan, settings
-
-**File: `src/components/tabs/OverviewTab.tsx`**
-- Remove the Settings card at the bottom (display name edit + sign out) since it moves to the dedicated Settings tab
-
----
-
-## Change 3: Show Member Payment Status in Overview Dashboard
-
-**File: `src/components/tabs/OverviewTab.tsx`**
-- In the "Group Funding" card (currently shows only percentage + status count badges), add a member-by-member status list below the progress bar
-- Each member row shows: name, status badge (Paid / On Track / Behind), and for organizers only, the dollar amounts (amount paid / share)
-- Uses the existing `memberFunding` query data already loaded in the component
-- This replaces the sparse "X Paid, Y On Track, Z Behind" summary with an actual visible list
-
-**File: `src/components/overview/MembersCard.tsx`**
-- Ensure the existing status badges in the Members card also reflect the `memberFunding` data consistently (already wired, no change needed)
-
----
+No styling changes -- uses the same Card/Input/Button components and patterns already in the file.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/components/tabs/SettingsTab.tsx` | NEW -- full profile/security/payment settings tab |
-| `src/pages/TripDashboard.tsx` | Replace Hype tab with Settings tab |
-| `src/components/tabs/OverviewTab.tsx` | Add organizer edit total card; add member payment status list; remove bottom settings section |
-| `src/components/tabs/FundTab.tsx` | Move edit total to top for organizer prominence |
-
-## No Database Changes Required
-
-All data sources already exist:
-- `profiles` table for display name
-- `auth.user` for email
-- `supabase.auth.updateUser()` for password changes
-- `payment_history` table for transaction log
-- `trip_member_funding` view for member payment status
-- `trip_funding_summary` view for totals
+| DB migration | Create `user_payment_methods` table with RLS |
+| `src/components/tabs/SettingsTab.tsx` | Add Payment Details card with view/edit/add flow |
 
