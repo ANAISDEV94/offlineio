@@ -1,9 +1,9 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Loader2, Share2, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,10 +17,28 @@ import SettingsTab from "@/components/tabs/SettingsTab";
 const TripDashboard = () => {
   const navigate = useNavigate();
   const { tripId } = useParams<{ tripId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
   const { user } = useAuth();
   const { toast } = useToast();
-  const { dashboard, isLoading, error } = useTripDashboard(tripId);
+  const { dashboard, isLoading, error, refresh } = useTripDashboard(tripId);
+  const paymentHandled = useRef(false);
+
+  // Detect ?payment=success after Stripe redirect
+  useEffect(() => {
+    if (searchParams.get("payment") === "success" && !paymentHandled.current) {
+      paymentHandled.current = true;
+      toast({
+        title: "💸 Payment received!",
+        description: "Your payment has been processed. Updating your balance...",
+      });
+      setActiveTab("fund");
+      // Remove the query param so refresh doesn't re-trigger
+      setSearchParams({}, { replace: true });
+      // Give webhook a moment to process, then refresh dashboard
+      setTimeout(() => refresh(), 2000);
+    }
+  }, [searchParams, toast, setSearchParams, refresh]);
 
   if (isLoading) {
     return (
