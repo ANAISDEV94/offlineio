@@ -238,6 +238,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
               setIsContributing(true);
               try {
                 const payload = { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) };
+                console.log("[Contribute] invoking create-checkout on", import.meta.env.VITE_SUPABASE_URL);
                 console.log("[Contribute] trip.id:", tripId);
                 console.log("[Contribute] contributionAmount:", contributionAmount);
                 console.log("[Contribute] payload:", payload);
