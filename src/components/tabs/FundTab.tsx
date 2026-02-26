@@ -2,19 +2,19 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTripRole } from "@/hooks/useTripRole";
 import { motion } from "framer-motion";
-import { Loader2, Shield, Users, CreditCard, CalendarDays, Clock, History } from "lucide-react";
+import { Loader2, CreditCard, CalendarDays, Clock, History, Wallet, Users, AlertTriangle } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, addWeeks } from "date-fns";
-import { computeMemberStatus } from "@/lib/funding-utils";
+import { computeMemberStatus, computeTripHealth } from "@/lib/funding-utils";
 
 interface FundTabProps {
   tripId: string;
@@ -22,9 +22,9 @@ interface FundTabProps {
 
 const FundTab = ({ tripId }: FundTabProps) => {
   const { user } = useAuth();
+  const { isOrganizer } = useTripRole(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [noDrama, setNoDrama] = useState(false);
   const [contributionAmount, setContributionAmount] = useState<string>("");
   const [isContributing, setIsContributing] = useState(false);
   const [payingAmount, setPayingAmount] = useState<string | null>(null);
@@ -71,7 +71,6 @@ const FundTab = ({ tripId }: FundTabProps) => {
 
   const myPayment = payments.find((p) => p.user_id === user?.id);
 
-  // Compute per-person from total_cost
   const totalCost = Number(trip?.total_cost) || payments.reduce((s, m) => s + Number(m.amount), 0);
   const memberCount = payments.length || 1;
   const perPersonCost = totalCost / memberCount;
@@ -82,9 +81,12 @@ const FundTab = ({ tripId }: FundTabProps) => {
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
-  // Payment plan calculations
+  const myPaid = myPayment ? Number(myPayment.amount_paid) : 0;
+  const myRemaining = Math.max(0, perPersonCost - myPaid);
+  const myStatus = computeMemberStatus(myPaid, perPersonCost, deadlineDays);
+
+  // Payment plan
   const planType = myPayment?.installment_plan || "monthly";
-  const myRemaining = myPayment ? Math.max(0, perPersonCost - Number(myPayment.amount_paid)) : perPersonCost;
 
   const getInstallmentInfo = (plan: string) => {
     if (myRemaining <= 0) return { amount: 0, nextDate: null, label: "Fully paid" };
@@ -102,7 +104,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
         const n = Math.max(1, parseInt(customPayments) || 4);
         return { amount: Math.ceil(myRemaining / n), nextDate: addDays(now, 7), label: `${n} payments` };
       }
-      default: { // monthly
+      default: {
         const months = deadlineDays ? Math.max(1, Math.floor(deadlineDays / 30)) : 1;
         return { amount: Math.ceil(myRemaining / months), nextDate: addDays(now, 30), label: `${months} monthly payments` };
       }
@@ -127,17 +129,29 @@ const FundTab = ({ tripId }: FundTabProps) => {
     },
   });
 
-  const toggleAutoPay = useMutation({
-    mutationFn: async (enabled: boolean) => {
-      if (!myPayment) return;
-      const { error } = await supabase.from("payments").update({ auto_pay: enabled }).eq("id", myPayment.id);
+  const handleContribute = async () => {
+    if (!user || !contributionAmount || Number(contributionAmount) <= 0) return;
+    setIsContributing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: "Please sign in to contribute", variant: "destructive" });
+        setIsContributing(false);
+        return;
+      }
+      const payload = { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) };
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: payload,
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payments", tripId] });
-      toast({ title: myPayment?.auto_pay ? "Auto-pay disabled" : "Auto-pay enabled" });
-    },
-  });
+      if (data?.url) window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Payment failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsContributing(false);
+    }
+  };
 
   const handlePay = async (paymentAmount: number) => {
     if (!user || paymentAmount <= 0) return;
@@ -149,9 +163,8 @@ const FundTab = ({ tripId }: FundTabProps) => {
         setPayingAmount(null);
         return;
       }
-      const amountCents = Math.round(paymentAmount * 100);
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { trip_id: tripId, amount_cents: amountCents },
+        body: { trip_id: tripId, amount_cents: Math.round(paymentAmount * 100) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
@@ -167,318 +180,234 @@ const FundTab = ({ tripId }: FundTabProps) => {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const size = 160;
-  const stroke = 12;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (pctFunded / 100) * circumference;
-
-  const isPublic = trip?.visibility === "public";
-  const minSpotsRequired = trip?.min_spots_required;
-  const fullyFundedMembers = payments.filter(p => Number(p.amount_paid) >= perPersonCost && perPersonCost > 0).length;
-
-  const healthScore = (() => {
-    const membersOnTrack = payments.filter((p) => {
-      const status = computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays);
-      return status === "Paid" || status === "On Track";
-    }).length;
-    const memberPct = payments.length > 0 ? (membersOnTrack / payments.length) * 100 : 100;
-    return Math.round((pctFunded * 0.5) + (memberPct * 0.3) + 20);
-  })();
-  const healthLabel = healthScore >= 80 ? "On Track" : healthScore >= 50 ? "Needs Attention" : "Behind";
+  // Trip health
+  const lateCount = payments.filter(p => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "Behind").length;
+  const onTrackCount = payments.filter(p => {
+    const s = computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays);
+    return s === "Paid" || s === "On Track";
+  }).length;
+  const pctOnTrack = payments.length > 0 ? (onTrackCount / payments.length) * 100 : 100;
+  const health = computeTripHealth(pctFunded, pctOnTrack, deadlineDays, lateCount, payments.length);
 
   return (
-    <div className="space-y-8">
-      {/* Progress Ring */}
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+    <div className="space-y-6">
+      {/* Section 1: Your Responsibility */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Your Responsibility</p>
         <Card className="border-0 shadow-sm glass-card">
-          <CardContent className="p-6 flex flex-col items-center">
-            <div className="relative" style={{ width: size, height: size }}>
-              <svg width={size} height={size} className="-rotate-90">
-                <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth={stroke} />
-                <motion.circle
-                  cx={size/2} cy={size/2} r={radius} fill="none"
-                  stroke="hsl(var(--primary))" strokeWidth={stroke} strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  initial={{ strokeDashoffset: circumference }}
-                  animate={{ strokeDashoffset: offset }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-display font-semibold">{pctFunded}%</span>
-                <span className="text-xs text-muted-foreground">funded</span>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="h-4 w-4 text-primary" />
+              <p className="text-sm font-medium">Payment Summary</p>
+              <Badge className={`text-[10px] border-0 ml-auto ${
+                myStatus === "Paid" ? "bg-accent/20 text-accent" : myStatus === "Behind" ? "bg-destructive/10 text-destructive" : "bg-secondary text-secondary-foreground"
+              }`}>{myStatus}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-muted/50 rounded-xl p-3 text-center">
+                <p className="text-lg font-display font-semibold">${Math.round(perPersonCost).toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">Your Share</p>
+              </div>
+              <div className="bg-muted/50 rounded-xl p-3 text-center">
+                <p className="text-lg font-display font-semibold text-primary">${myPaid.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">You've Paid</p>
               </div>
             </div>
-            {!noDrama && (
-              <p className="text-sm text-muted-foreground mt-3">
-                ${totalFunded.toLocaleString()} of ${totalCost.toLocaleString()}
-              </p>
+            {myRemaining > 0 && (
+              <div className="bg-destructive/5 rounded-xl p-3 text-center">
+                <p className="text-lg font-display font-semibold text-destructive">${myRemaining.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">You Still Owe</p>
+              </div>
+            )}
+            {trip?.payment_deadline && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                Deadline: {format(new Date(trip.payment_deadline), "MMM d, yyyy")}
+                {deadlineDays !== null && deadlineDays > 0 && <span>· {deadlineDays} days left</span>}
+              </div>
+            )}
+            {myRemaining > 0 && (
+              <div className="flex items-start gap-2 bg-muted/30 rounded-xl p-2.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                <p className="text-[10px] text-muted-foreground">
+                  If you don't pay by the deadline, the organizer can remove you and the per-person share auto-adjusts for the remaining group.
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>
-      </motion.div>
 
-      {/* Contribution Section */}
-      <Card className="border-0 shadow-sm glass-card">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-primary" />
-            <p className="text-sm font-medium">Contribute</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="contribution-amount" className="text-xs">Contribution Amount (USD)</Label>
-            <Input
-              id="contribution-amount"
-              type="number"
-              min="1"
-              placeholder="0.00"
-              value={contributionAmount}
-              onChange={(e) => setContributionAmount(e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-          <Button
-            className="w-full rounded-xl gap-1.5"
-            disabled={!contributionAmount || Number(contributionAmount) <= 0 || isContributing}
-            onClick={async () => {
-              setIsContributing(true);
-              try {
-                // Phase 3 — Session gate
-                const { data: { session } } = await supabase.auth.getSession();
-                console.log("[Contribute] session exists =", !!session);
-                console.log("[Contribute] function = create-checkout");
-                if (!session) {
-                  toast({ title: "Please sign in to contribute", variant: "destructive" });
-                  setIsContributing(false);
-                  return;
-                }
-
-                const payload = { trip_id: tripId, amount_cents: Math.round(Number(contributionAmount) * 100) };
-                console.log("[Contribute] payload:", payload);
-
-                const { data, error } = await supabase.functions.invoke("create-checkout", {
-                  body: payload,
-                  headers: { Authorization: `Bearer ${session.access_token}` },
-                });
-
-                console.log("[Contribute] response data:", data);
-                if (error) {
-                  console.error("[Contribute] error:", JSON.stringify(error));
-                  throw error;
-                }
-
-                if (data?.url) {
-                  window.location.href = data.url;
-                } else {
-                  console.error("[Contribute] no url in response:", data);
-                }
-              } catch (err: any) {
-                console.error("[Contribute] caught:", JSON.stringify(err));
-                toast({ title: "Contribution failed", description: err.message, variant: "destructive" });
-              } finally {
-                setIsContributing(false);
-              }
-            }}
-          >
-            {isContributing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-            Contribute
-          </Button>
-        </CardContent>
-      </Card>
-
-      {isPublic && minSpotsRequired && (
-        <Card className="border-0 shadow-sm glass-card">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              <div>
-                <p className="text-sm font-medium">{fullyFundedMembers} / {minSpotsRequired} minimum spots funded</p>
-                <p className="text-[10px] text-muted-foreground">Trip activates when minimum is reached</p>
+        {/* Payment Plan */}
+        {myPayment && myRemaining > 0 && (
+          <Card className="border-0 shadow-sm glass-card">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                <p className="text-sm font-medium">Payment Plan</p>
               </div>
-            </div>
-            <Badge variant={fullyFundedMembers >= minSpotsRequired ? "default" : "secondary"} className="text-[10px]">
-              {fullyFundedMembers >= minSpotsRequired ? "Activated" : `${minSpotsRequired - fullyFundedMembers} more needed`}
-            </Badge>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-0 shadow-sm glass-card">
-        <CardContent className="p-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">Trip Health</p>
-            <p className="text-xs text-muted-foreground">{healthScore}% — {healthLabel}</p>
-          </div>
-          <Badge variant={healthScore >= 80 ? "default" : "secondary"} className="text-xs">{healthLabel}</Badge>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap gap-3">
-        {deadlineDays !== null && (
-          <Card className="border-0 shadow-sm flex-1 min-w-[140px]">
-            <CardContent className="p-3 text-center">
-              <p className="text-lg font-display font-semibold">{deadlineDays > 0 ? deadlineDays : 0}</p>
-              <p className="text-[10px] text-muted-foreground">days until funding deadline</p>
+              <Select value={planType} onValueChange={(v) => updatePlan.mutate(v)}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="biweekly">Biweekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+              {planType === "custom" && (
+                <div className="flex items-center gap-2">
+                  <Input type="number" min="1" max="52" value={customPayments} onChange={(e) => setCustomPayments(e.target.value)} className="rounded-xl w-20 h-9" />
+                  <span className="text-xs text-muted-foreground">payments</span>
+                </div>
+              )}
+              <div className="bg-primary/5 rounded-xl p-3 space-y-1">
+                <p className="text-sm font-medium">
+                  Suggested: <span className="text-primary">${installment.amount.toLocaleString()}</span> × {installment.label}
+                </p>
+                {installment.nextDate && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> Next due: {format(installment.nextDate, "MMM d, yyyy")}
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Card className="border-0 shadow-sm flex-1 min-w-[140px] cursor-help">
-                <CardContent className="p-3 text-center flex flex-col items-center gap-1">
-                  <Shield className="h-5 w-5 text-primary" />
-                  <p className="text-[10px] font-medium">Funds Protected</p>
-                </CardContent>
-              </Card>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[220px] text-xs">
-              No one fronts the villa. Funds release when trip is fully funded.
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
 
-      <div className="flex items-center justify-between px-1">
-        <span className="text-sm font-medium">No-Drama Mode</span>
-        <Switch checked={noDrama} onCheckedChange={setNoDrama} />
-      </div>
+      {/* Section 2: Group Funding */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Group Funding</p>
 
-      {/* Payment Plan Section */}
-      {myPayment && myRemaining > 0 && (
         <Card className="border-0 shadow-sm glass-card">
-          <CardContent className="p-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-primary" />
-              <p className="text-sm font-medium">Payment Plan</p>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total funded</span>
+              <span className="font-semibold text-primary">{pctFunded}%</span>
             </div>
-            <Select
-              value={planType}
-              onValueChange={(v) => updatePlan.mutate(v)}
-            >
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="biweekly">Biweekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-            {planType === "custom" && (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number" min="1" max="52" value={customPayments}
-                  onChange={(e) => setCustomPayments(e.target.value)}
-                  className="rounded-xl w-20 h-9"
-                />
-                <span className="text-xs text-muted-foreground">payments</span>
+            <Progress value={pctFunded} className="h-2.5 rounded-full" />
+            {isOrganizer && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>${totalFunded.toLocaleString()} funded</span>
+                <span>${Math.max(0, totalCost - totalFunded).toLocaleString()} remaining</span>
               </div>
             )}
-            <div className="bg-primary/5 rounded-xl p-3 space-y-1">
-              <p className="text-sm font-medium">
-                Suggested: <span className="text-primary">${installment.amount.toLocaleString()}</span> × {installment.label}
-              </p>
-              {installment.nextDate && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Next due: {format(installment.nextDate, "MMM d, yyyy")}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Auto-pay</p>
-                <p className="text-[10px] text-muted-foreground">Auto-pay will run on due dates</p>
-              </div>
-              <Switch checked={myPayment.auto_pay} onCheckedChange={(v) => toggleAutoPay.mutate(v)} />
-            </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Payment History */}
-      {paymentHistory.length > 0 && (
+        {/* Trip Health */}
+        <Card className="border-0 shadow-sm glass-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Trip Health</p>
+              <p className="text-xs text-muted-foreground">{health.score}% — {health.status}</p>
+            </div>
+            <Badge className={`text-[10px] border-0 ${
+              health.status === "Healthy" ? "bg-accent/20 text-accent" :
+              health.status === "At Risk" ? "bg-yellow-100 text-yellow-700" :
+              health.status === "Needs Action" ? "bg-orange-100 text-orange-700" :
+              "bg-destructive/10 text-destructive"
+            }`}>{health.status}</Badge>
+          </CardContent>
+        </Card>
+
+        {/* Member Status (badges only, no dollar amounts) */}
+        <Card className="border-0 shadow-sm glass-card">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="h-4 w-4 text-primary" />
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Member Status</p>
+            </div>
+            {payments.map((m: any) => {
+              const paid = Number(m.amount_paid);
+              const status = computeMemberStatus(paid, perPersonCost, deadlineDays);
+              const isMe = m.user_id === user?.id;
+              return (
+                <div key={m.id} className="flex items-center justify-between py-1.5">
+                  <p className="text-sm font-medium">
+                    {m.displayName} {isMe && <span className="text-primary text-xs">(You)</span>}
+                  </p>
+                  <Badge className={`text-[10px] border-0 ${
+                    status === "Paid" ? "bg-accent/20 text-accent" :
+                    status === "On Track" ? "bg-secondary text-secondary-foreground" :
+                    "bg-destructive/10 text-destructive"
+                  }`}>{status}</Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section 3: Make a Payment */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Make a Payment</p>
+
+        {myRemaining > 0 && (
+          <Card className="border-0 shadow-sm bg-primary/5">
+            <CardContent className="p-4 space-y-3">
+              <Button className="w-full rounded-xl gap-2" onClick={() => handlePay(myRemaining)} disabled={payingAmount !== null}>
+                {payingAmount ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                Pay Full Balance — ${myRemaining.toLocaleString()}
+              </Button>
+              {myRemaining > 100 && installment.amount < myRemaining && (
+                <Button variant="outline" className="w-full rounded-xl gap-2" onClick={() => handlePay(installment.amount)} disabled={payingAmount !== null}>
+                  Pay Installment — ${installment.amount.toLocaleString()}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <History className="h-4 w-4 text-primary" />
-              <p className="text-sm font-medium">Payment History</p>
+              <CreditCard className="h-4 w-4 text-primary" />
+              <p className="text-sm font-medium">Custom Amount</p>
             </div>
-            {paymentHistory.map((h: any) => (
-              <div key={h.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                <div>
-                  <p className="text-sm">${Number(h.amount).toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground">{format(new Date(h.created_at), "MMM d, yyyy")}</p>
-                </div>
-                <Badge className="text-[10px] bg-accent/20 text-foreground border-0">{h.status}</Badge>
-              </div>
-            ))}
+            <div className="space-y-1.5">
+              <Label htmlFor="contribution-amount" className="text-xs">Amount (USD)</Label>
+              <Input
+                id="contribution-amount"
+                type="number" min="1" placeholder="0.00"
+                value={contributionAmount}
+                onChange={(e) => setContributionAmount(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+            <Button className="w-full rounded-xl gap-1.5"
+              disabled={!contributionAmount || Number(contributionAmount) <= 0 || isContributing}
+              onClick={handleContribute}
+            >
+              {isContributing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              Submit Payment
+            </Button>
           </CardContent>
         </Card>
-      )}
 
-      {/* Members List */}
-      {payments.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-3xl mb-2">💰</p>
-          <p className="text-sm text-muted-foreground">No payments set up yet.</p>
-          <p className="text-xs text-muted-foreground mt-1">The trip organizer can set up payment plans for each member.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Members</p>
-          {payments.map((m, i) => {
-            const paid = Number(m.amount_paid);
-            const pct = perPersonCost > 0 ? Math.min(100, Math.round((paid / perPersonCost) * 100)) : 0;
-            const status = computeMemberStatus(paid, perPersonCost, deadlineDays);
-            const statusColor = status === "Paid" ? "bg-accent/20" : status === "On Track" ? "bg-secondary" : "bg-destructive/10";
-            const isMe = m.user_id === user?.id;
-            const remaining = Math.max(0, perPersonCost - paid);
-            return (
-              <motion.div key={m.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <Card className={`border-0 shadow-sm ${isMe ? "ring-1 ring-primary/30" : ""}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{m.displayName} {isMe && <span className="text-primary text-xs">(You)</span>}</p>
-                        {noDrama ? (
-                          <p className="text-xs text-muted-foreground">{pct}% complete</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            ${paid.toLocaleString()} / ${Math.round(perPersonCost).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                      <Badge className={`text-[10px] ${statusColor} text-foreground border-0`}>{status}</Badge>
-                    </div>
-                    {isMe && remaining > 0 && (
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          size="sm" className="rounded-xl flex-1 gap-1.5"
-                          onClick={() => handlePay(remaining)} disabled={payingAmount !== null}
-                        >
-                          {payingAmount ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
-                          Pay ${remaining.toLocaleString()}
-                        </Button>
-                        {remaining > 100 && installment.amount < remaining && (
-                          <Button
-                            size="sm" variant="outline" className="rounded-xl gap-1.5"
-                            onClick={() => handlePay(installment.amount)} disabled={payingAmount !== null}
-                          >
-                            Pay ${installment.amount.toLocaleString()}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
+        {/* Payment History */}
+        {paymentHistory.length > 0 && (
+          <Card className="border-0 shadow-sm glass-card">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-primary" />
+                <p className="text-sm font-medium">Your Payment History</p>
+              </div>
+              {paymentHistory.map((h: any) => (
+                <div key={h.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                  <div>
+                    <p className="text-sm">${Number(h.amount).toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">{format(new Date(h.created_at), "MMM d, yyyy")}</p>
+                  </div>
+                  <Badge className="text-[10px] bg-accent/20 text-foreground border-0">{h.status}</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-      {/* Reminder badge */}
+      {/* Deadline Reminder */}
       {deadlineDays !== null && deadlineDays <= 14 && deadlineDays > 0 && myRemaining > 0 && (
         <Card className="border-0 shadow-sm bg-destructive/5">
           <CardContent className="p-4 text-center">
