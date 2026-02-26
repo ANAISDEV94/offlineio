@@ -574,6 +574,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_payment_methods: {
+        Row: {
+          billing_name: string | null
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last_four: string | null
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_name?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last_four?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_name?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last_four?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       trip_funding_summary: {

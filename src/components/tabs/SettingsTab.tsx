@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, History, LogOut, Pencil, Check, X, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
+import PaymentDetailsCard from "@/components/settings/PaymentDetailsCard";
 
 interface SettingsTabProps {
   tripId: string;
@@ -189,6 +190,9 @@ const SettingsTab = ({ tripId }: SettingsTabProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Payment Details */}
+      <PaymentDetailsCard />
 
       {/* Payment History */}
       <Card className="rounded-2xl border-0 shadow-sm glass-card">
