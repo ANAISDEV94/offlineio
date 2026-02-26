@@ -48,6 +48,8 @@ serve(async (req) => {
       return new Response(`Webhook signature invalid: ${err}`, { status: 400 });
     }
 
+    console.log("[stripe-webhook] Signature verified. event.type:", event.type);
+
     // ---- 2. Handle checkout.session.completed ----
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
