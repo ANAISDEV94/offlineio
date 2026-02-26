@@ -59,12 +59,24 @@ const FundingSummaryCard = ({
     if (!userId || amount <= 0) return;
     setPaying(true);
     try {
+      // Phase 3 — Session gate
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("[FundingSummary] session exists =", !!session);
+      if (!session) {
+        toast({ title: "Please sign in to contribute", variant: "destructive" });
+        setPaying(false);
+        return;
+      }
+
+      const amountCents = Math.round(amount * 100);
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { tripId, amount },
+        body: { trip_id: tripId, amount_cents: amountCents },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
-      if (data?.url) window.open(data.url, "_blank");
+      if (data?.url) window.location.href = data.url;
     } catch (err: any) {
+      console.error("[FundingSummary] error:", JSON.stringify(err));
       toast({ title: "Payment error", description: err.message, variant: "destructive" });
     } finally {
       setPaying(false);
