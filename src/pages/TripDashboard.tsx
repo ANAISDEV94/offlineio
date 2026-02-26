@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { ArrowLeft, Loader2, Share2, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +17,7 @@ import SettingsTab from "@/components/tabs/SettingsTab";
 const TripDashboard = () => {
   const navigate = useNavigate();
   const { tripId } = useParams<{ tripId: string }>();
+  const [activeTab, setActiveTab] = useState("overview");
   const { user } = useAuth();
   const { toast } = useToast();
   const { dashboard, isLoading, error } = useTripDashboard(tripId);
@@ -117,7 +119,7 @@ const TripDashboard = () => {
       </div>
 
       {/* 4-Tab Layout */}
-      <Tabs defaultValue="overview" className="px-2 mt-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="px-2 mt-2">
         <TabsList className="w-full justify-between glass-card rounded-2xl shadow-sm border-0 h-12 p-1">
           <TabsTrigger value="overview" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">📊 Overview</TabsTrigger>
           <TabsTrigger value="fund" className="rounded-xl text-[10px] data-[state=active]:shadow-sm">💰 Fund</TabsTrigger>
@@ -128,7 +130,7 @@ const TripDashboard = () => {
         <div className="mt-4 px-2">
           <TabsContent value="overview"><OverviewTab tripId={tripId!} /></TabsContent>
           <TabsContent value="fund"><FundTab tripId={tripId!} /></TabsContent>
-          <TabsContent value="plan"><PlanTab tripId={tripId!} /></TabsContent>
+          <TabsContent value="plan"><PlanTab tripId={tripId!} onSwitchToFund={() => setActiveTab("fund")} /></TabsContent>
           <TabsContent value="settings"><SettingsTab tripId={tripId!} /></TabsContent>
         </div>
       </Tabs>

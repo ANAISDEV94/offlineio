@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTripDashboard } from "@/hooks/useTripDashboard";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, History, LogOut, Pencil, Check, X, Eye, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import PaymentDetailsCard from "@/components/settings/PaymentDetailsCard";
+import TripDocumentsCard from "@/components/TripDocumentsCard";
 
 interface SettingsTabProps {
   tripId: string;
@@ -18,6 +20,7 @@ interface SettingsTabProps {
 
 const SettingsTab = ({ tripId }: SettingsTabProps) => {
   const { user, signOut } = useAuth();
+  const { dashboard } = useTripDashboard(tripId);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -190,6 +193,9 @@ const SettingsTab = ({ tripId }: SettingsTabProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Trip Documents */}
+      <TripDocumentsCard tripId={tripId} isOrganizer={dashboard?.current_user?.role === "organizer"} />
 
       {/* Payment Details */}
       <PaymentDetailsCard />

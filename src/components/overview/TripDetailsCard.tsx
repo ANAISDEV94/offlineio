@@ -43,6 +43,7 @@ const TripDetailsCard = ({ trip, computedPerPerson }: TripDetailsCardProps) => {
           <span className="text-muted-foreground">Per Person</span>
           <span className="font-medium text-foreground">${displayPerPerson.toLocaleString()}</span>
         </div>
+        <p className="text-[10px] text-muted-foreground">Per-person share updates automatically as members join.</p>
       </CardContent>
     </Card>
   );

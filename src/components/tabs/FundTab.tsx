@@ -169,7 +169,30 @@ const FundTab = ({ tripId }: FundTabProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Organizer: Edit Trip Total */}
+      {/* How Funding + Booking Works */}
+      <Card className="border-0 shadow-sm bg-primary/5">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-sm font-medium">How funding + booking works</p>
+          <ul className="space-y-1.5">
+            <li className="text-xs text-muted-foreground flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              Everyone pays their share into the trip pool.
+            </li>
+            <li className="text-xs text-muted-foreground flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              When the trip hits 100% funded, bookings unlock.
+            </li>
+            <li className="text-xs text-muted-foreground flex items-start gap-2">
+              <span className="text-primary mt-0.5">•</span>
+              The organizer books flights/stay/experiences and posts confirmations and receipts here.
+            </li>
+          </ul>
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" /> Your payment is processed by Stripe. We never store your card details.
+          </p>
+        </CardContent>
+      </Card>
+
       {isOrganizer && (
         <Card className="border-0 shadow-sm glass-card">
           <CardContent className="p-4 space-y-2">

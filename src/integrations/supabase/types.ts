@@ -242,6 +242,63 @@ export type Database = {
           },
         ]
       }
+      organizer_bookings: {
+        Row: {
+          booking_url: string | null
+          category: string
+          confirmation_number: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          receipt_url: string | null
+          status: string
+          trip_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          booking_url?: string | null
+          category: string
+          confirmation_number?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          status?: string
+          trip_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          booking_url?: string | null
+          category?: string
+          confirmation_number?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          status?: string
+          trip_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizer_bookings_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "organizer_bookings_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outfit_posts: {
         Row: {
           caption: string | null
@@ -501,6 +558,48 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      trip_documents: {
+        Row: {
+          created_at: string
+          file_url: string
+          id: string
+          title: string
+          trip_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_url: string
+          id?: string
+          title: string
+          trip_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_url?: string
+          id?: string
+          title?: string
+          trip_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_documents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "trip_documents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       trip_members: {
         Row: {
