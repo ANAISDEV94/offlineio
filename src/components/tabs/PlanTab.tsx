@@ -257,7 +257,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium">Plan this trip for me</p>
-            <p className="text-[10px] text-muted-foreground">Answer a few questions and AI generates your budget + itinerary</p>
+            <p className="text-[10px] text-muted-foreground">Answer a few questions and we'll build your budget + itinerary</p>
           </div>
           <Sparkles className="h-4 w-4 text-primary" />
         </CardContent>
@@ -268,7 +268,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
       {/* Draft Plan Items */}
       {hasDrafts && (
         <div className="space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">AI Draft Plan</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Draft Plan</p>
           {draftBudgetItems.length > 0 && (
             <div className="grid grid-cols-2 gap-2">
               {draftBudgetItems.map((item: any) => (
@@ -456,178 +456,175 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
         </Collapsible>
       )}
 
-      {/* Bookings by Category */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What We're Booking</p>
-          {totalBookingCost > 0 && (
-            <p className="text-xs text-muted-foreground">${totalBookingCost.toLocaleString()} total</p>
-          )}
-        </div>
-
-        {bookingsByCategory.map(cat => (
-          <div key={cat.key} className="space-y-2">
-            {/* Organizer Booking Card (only for flights/stay/experiences when fully funded) */}
-            {isFullyFunded && ORGANIZER_BOOKING_CATEGORIES.includes(cat.key) && (
-              <OrganizerBookingCard
-                tripId={tripId}
-                category={cat.key}
-                label={cat.label}
-                emoji={cat.emoji}
-                isOrganizer={isOrganizer}
-              />
+      {/* Bookings by Category - only show when there's content */}
+      {(bookings.length > 0 || draftBudgetItems.length > 0) && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What We're Booking</p>
+            {totalBookingCost > 0 && (
+              <p className="text-xs text-muted-foreground">${totalBookingCost.toLocaleString()} total</p>
             )}
-
-            <Card className={`border-0 shadow-sm ${!isFullyFunded ? "opacity-60" : ""}`}>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">{cat.emoji}</span>
-                    <p className="text-sm font-medium">{cat.label}</p>
-                    {!isFullyFunded && <Lock className="h-3 w-3 text-muted-foreground" />}
-                  </div>
-                  {cat.total > 0 && <p className="text-xs text-muted-foreground">${cat.total.toLocaleString()}</p>}
-                </div>
-
-                {!isFullyFunded && (
-                  <p className="text-[10px] text-muted-foreground">Fund the trip to unlock planning details and booking assignments.</p>
-                )}
-
-                {cat.items.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {cat.items.map(b => (
-                      <div key={b.id} className="flex items-center justify-between py-1 group">
-                        <div>
-                          <p className="text-sm">{b.title}</p>
-                          {b.notes && <p className="text-[10px] text-muted-foreground">{b.notes}</p>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {b.price && <p className="text-xs font-medium">${Number(b.price).toLocaleString()}</p>}
-                          {isFullyFunded && b.created_by === user?.id && (
-                            <button onClick={() => deleteBooking.mutate({ id: b.id, price: b.price })}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No bookings yet</p>
-                )}
-              </CardContent>
-            </Card>
           </div>
-        ))}
 
-        {/* Add Booking (only when fully funded + organizer) */}
-        {isOrganizer && isFullyFunded && (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 space-y-3">
-              <p className="text-sm font-medium">Add Booking</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="Title" value={newBooking.title} onChange={e => setNewBooking(p => ({ ...p, title: e.target.value }))} className="rounded-xl text-sm h-9" />
-                <Input type="number" placeholder="Price" value={newBooking.price} onChange={e => setNewBooking(p => ({ ...p, price: e.target.value }))} className="rounded-xl text-sm h-9" />
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={newBooking.category}
-                  onChange={e => setNewBooking(p => ({ ...p, category: e.target.value }))}
-                  className="rounded-xl text-sm h-9 border border-input bg-background px-3 flex-1"
-                >
-                  {BOOKING_CATEGORIES.map(c => (
-                    <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
-                  ))}
-                </select>
-                <Button size="sm" className="rounded-xl h-9" onClick={() => addBooking.mutate()} disabled={!newBooking.title.trim()}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          {bookingsByCategory.map(cat => (
+            <div key={cat.key} className="space-y-2">
+              {/* Organizer Booking Card (only for flights/stay/experiences when fully funded) */}
+              {isFullyFunded && ORGANIZER_BOOKING_CATEGORIES.includes(cat.key) && (
+                <OrganizerBookingCard
+                  tripId={tripId}
+                  category={cat.key}
+                  label={cat.label}
+                  emoji={cat.emoji}
+                  isOrganizer={isOrganizer}
+                />
+              )}
 
-      {/* Itinerary */}
-      <div className="space-y-3">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Itinerary</p>
-        {isFullyFunded && (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 space-y-3">
-              <p className="text-sm font-medium">Add to Itinerary</p>
-              <div className="flex gap-2">
-                <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
-                <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-28" />
-                <Input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem.mutate()} className="rounded-xl flex-1" placeholder="Activity..." />
-                <Button onClick={() => addItem.mutate()} size="icon" className="rounded-xl shrink-0" disabled={addItem.isPending}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              <Card className={`border-0 shadow-sm ${!isFullyFunded ? "opacity-60" : ""}`}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{cat.emoji}</span>
+                      <p className="text-sm font-medium">{cat.label}</p>
+                      {!isFullyFunded && <Lock className="h-3 w-3 text-muted-foreground" />}
+                    </div>
+                    {cat.total > 0 && <p className="text-xs text-muted-foreground">${cat.total.toLocaleString()}</p>}
+                  </div>
 
-        {Object.keys(days).length > 0 ? (
-          <div className="space-y-4">
-            {Object.entries(days).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
-              <motion.div key={day} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card className={`border-0 shadow-sm ${!isFullyFunded ? "opacity-60" : ""}`}>
-                  <CardHeader className="pb-2"><CardTitle className="text-base font-display font-medium">Day {day}</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    {items.map((item) => (
-                      <div key={item.id}>
-                        {editingItem === item.id && isFullyFunded ? (
-                          <div className="space-y-2 p-2 rounded-xl bg-muted/50">
-                            <div className="flex gap-2">
-                              <Input type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} className="rounded-xl text-sm h-8 w-28" />
-                              <Input value={editForm.activity} onChange={e => setEditForm(p => ({ ...p, activity: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" />
-                            </div>
-                            <Input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Notes..." />
-                            <div className="flex gap-1">
-                              <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateItem.mutate(item.id)}>
-                                <Check className="h-3 w-3 mr-1" /> Save
-                              </Button>
-                              <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingItem(null)}>
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
+                  {!isFullyFunded && (
+                    <p className="text-[10px] text-muted-foreground">Fund the trip to unlock planning details and booking assignments.</p>
+                  )}
+
+                  {cat.items.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {cat.items.map(b => (
+                        <div key={b.id} className="flex items-center justify-between py-1 group">
+                          <div>
+                            <p className="text-sm">{b.title}</p>
+                            {b.notes && <p className="text-[10px] text-muted-foreground">{b.notes}</p>}
                           </div>
-                        ) : (
-                          <div className="flex gap-3 group">
-                            <div className="text-xs text-primary font-medium w-16 pt-0.5 shrink-0">{formatTime(item.time)}</div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{item.activity}</p>
-                              {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
-                            </div>
-                            {isFullyFunded && (
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => { setEditingItem(item.id); setEditForm({ activity: item.activity, time: item.time || "", notes: item.notes || "" }); }}>
-                                  <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
-                                </button>
-                                <button onClick={() => deleteItem.mutate(item.id)}>
-                                  <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                                </button>
-                              </div>
+                          <div className="flex items-center gap-2">
+                            {b.price && <p className="text-xs font-medium">${Number(b.price).toLocaleString()}</p>}
+                            {isFullyFunded && b.created_by === user?.id && (
+                              <button onClick={() => deleteBooking.mutate({ id: b.id, price: b.price })}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                              </button>
                             )}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No bookings yet</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+
+          {/* Add Booking (only when fully funded + organizer) */}
+          {isOrganizer && isFullyFunded && (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-sm font-medium">Add Booking</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="Title" value={newBooking.title} onChange={e => setNewBooking(p => ({ ...p, title: e.target.value }))} className="rounded-xl text-sm h-9" />
+                  <Input type="number" placeholder="Price" value={newBooking.price} onChange={e => setNewBooking(p => ({ ...p, price: e.target.value }))} className="rounded-xl text-sm h-9" />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={newBooking.category}
+                    onChange={e => setNewBooking(p => ({ ...p, category: e.target.value }))}
+                    className="rounded-xl text-sm h-9 border border-input bg-background px-3 flex-1"
+                  >
+                    {BOOKING_CATEGORIES.map(c => (
+                      <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
                     ))}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <p className="text-3xl mb-2">📋</p>
-            <p className="text-sm text-muted-foreground">
-              {isFullyFunded ? "No itinerary items yet. Add your first activity above." : "Itinerary will be editable once funding reaches 100%."}
-            </p>
-          </div>
-        )}
-      </div>
+                  </select>
+                  <Button size="sm" className="rounded-xl h-9" onClick={() => addBooking.mutate()} disabled={!newBooking.title.trim()}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Itinerary - only show when there's content */}
+      {(Object.keys(days).length > 0 || draftItineraryItems.length > 0) && (
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">Itinerary</p>
+          {isFullyFunded && (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-sm font-medium">Add to Itinerary</p>
+                <div className="flex gap-2">
+                  <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
+                  <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-28" />
+                  <Input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem.mutate()} className="rounded-xl flex-1" placeholder="Activity..." />
+                  <Button onClick={() => addItem.mutate()} size="icon" className="rounded-xl shrink-0" disabled={addItem.isPending}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {Object.keys(days).length > 0 && (
+            <div className="space-y-4">
+              {Object.entries(days).sort(([a], [b]) => Number(a) - Number(b)).map(([day, items]) => (
+                <motion.div key={day} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <Card className={`border-0 shadow-sm ${!isFullyFunded ? "opacity-60" : ""}`}>
+                    <CardHeader className="pb-2"><CardTitle className="text-base font-display font-medium">Day {day}</CardTitle></CardHeader>
+                    <CardContent className="space-y-3">
+                      {items.map((item) => (
+                        <div key={item.id}>
+                          {editingItem === item.id && isFullyFunded ? (
+                            <div className="space-y-2 p-2 rounded-xl bg-muted/50">
+                              <div className="flex gap-2">
+                                <Input type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} className="rounded-xl text-sm h-8 w-28" />
+                                <Input value={editForm.activity} onChange={e => setEditForm(p => ({ ...p, activity: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" />
+                              </div>
+                              <Input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Notes..." />
+                              <div className="flex gap-1">
+                                <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateItem.mutate(item.id)}>
+                                  <Check className="h-3 w-3 mr-1" /> Save
+                                </Button>
+                                <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingItem(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-3 group">
+                              <div className="text-xs text-primary font-medium w-16 pt-0.5 shrink-0">{formatTime(item.time)}</div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{item.activity}</p>
+                                {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                              </div>
+                              {isFullyFunded && (
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => { setEditingItem(item.id); setEditForm({ activity: item.activity, time: item.time || "", notes: item.notes || "" }); }}>
+                                    <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                                  </button>
+                                  <button onClick={() => deleteItem.mutate(item.id)}>
+                                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
