@@ -1,83 +1,196 @@
 
 
-# Upgrade AI Trip Planner to Chat-Style Q&A Wizard
+# Funding Gate + Organizer Booking Coordinator MVP
 
-## What Changes
-
-Replace the current form-based questionnaire in `AiTripPlanner.tsx` with a **chat-style, one-question-at-a-time wizard** that feels conversational and effortless. The backend and data flow stay the same -- only the Step 1 UI changes significantly.
-
----
-
-## Chat Wizard Design (6 Questions)
-
-The wizard presents questions one at a time in a chat bubble format. Each question appears as an "AI message," and the user's selection appears as a "user reply" bubble before the next question animates in.
-
-| # | Question | Input Type | Answer Key |
-|---|----------|-----------|------------|
-| 1 | "What kind of stay are you feeling?" | Single-select pills: Budget, Mid-range, Luxury, Unique stays | `accommodation` |
-| 2 | "What do you want to do there?" | Multi-select pills: Adventure, Culture, Food, Relaxation, Nightlife | `activities` |
-| 3 | "How packed should your days be?" | Single-select pills: Packed schedule, Balanced, Relaxed | `pace` |
-| 4 | "Any food preferences or dietary needs?" | Free text input (skip button) | `dietaryNeeds` |
-| 5 | "Anything you absolutely must do or see?" | Free text input (skip button) | `mustSee` |
-| 6 | "Any other special requests?" | Free text input (skip button) | `specialRequests` |
-
-After question 6 is answered (or skipped), the "Generate My Plan" button auto-appears.
+## Overview
+Transform the Plan tab from a booking engine into a **funding-first coordinator**. Before 100% funded, everything is locked with clear CTAs to fund. After 100%, the organizer gets booking management cards to track flights, stays, and experiences.
 
 ---
 
-## UI Details
+## 1. Database Changes (1 migration)
 
-- **Chat bubbles**: AI questions appear left-aligned in a light card style. User answers appear right-aligned with primary background.
-- **Pill buttons**: For single/multi-select, show horizontally wrapped pill buttons below the AI bubble. Selected pills get primary styling.
-- **Multi-select**: A "Next" button appears once at least one option is selected.
-- **Text inputs**: A compact input with send button. "Skip" link for optional questions.
-- **Auto-scroll**: Each new question scrolls into view with a brief animation (framer-motion fade+slide).
-- **Progress dots**: Small dot indicators at the top showing 1-6 progress.
+### New table: `organizer_bookings`
+Stores the organizer's booking status per category per trip.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | default gen_random_uuid() |
+| trip_id | uuid NOT NULL | |
+| category | text NOT NULL | flights, stay, experiences |
+| status | text NOT NULL | default 'not_booked' (not_booked / in_progress / booked) |
+| booking_url | text | Optional link |
+| confirmation_number | text | Optional |
+| receipt_url | text | Optional (storage file path) |
+| notes | text | Multiline notes |
+| updated_by | uuid | |
+| created_at | timestamptz | default now() |
+| updated_at | timestamptz | default now() |
+
+**RLS**: Members can SELECT for their trip. Only organizers can INSERT/UPDATE/DELETE.
+
+### New table: `trip_documents`
+Stores uploaded receipts and itineraries.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | default gen_random_uuid() |
+| trip_id | uuid NOT NULL | |
+| title | text NOT NULL | |
+| file_url | text NOT NULL | storage path |
+| uploaded_by | uuid NOT NULL | |
+| created_at | timestamptz | default now() |
+
+**RLS**: Members can SELECT. Organizers can INSERT/DELETE.
+
+### New storage bucket: `trip-documents`
+Public bucket for receipts and itinerary PDFs.
 
 ---
 
-## Files to Modify
+## 2. Plan Tab - Locked State (funded_percent < 1)
 
-### `src/components/AiTripPlanner.tsx` (full rewrite of Step 1)
-- Replace the flat form layout with a `chatMessages` state array that tracks `{role: "ai" | "user", content: string, questionIndex: number}`.
-- Add a `currentQuestion` index (0-5) that advances as the user answers.
-- Keep existing `generate()`, `saveDraft()`, and Step 2 (generating) / Step 3 (preview) exactly the same.
-- Expand the `Answers` interface to include `dietaryNeeds` and `mustSee` fields.
-- Wire the 6 answers into `answers_json` sent to the generate endpoint.
+### Changes to `PlanTab.tsx`:
 
-### `supabase/functions/generate-trip-plan/index.ts` (minor prompt update)
-- Update the system prompt to reference the two new answer fields (`dietaryNeeds`, `mustSee`) from `answers_json` so the LLM uses them in planning.
+**Top banner** (replaces current simple lock card):
+- Lock icon + "Bookings unlock at 100% funded."
+- Subtitle: "Once funded, the organizer will book everything and share confirmations here."
+- Progress bar showing current funding %
+- Primary "Go to Fund" button that switches to the Fund tab
 
-No database changes, no new edge functions, no new dependencies needed.
+**Category sections** (Flights, Stay, Experiences, Shared Costs, Buffer):
+- Render all 5 category cards but with `opacity-60` and a lock overlay
+- Under each locked section title: "Fund the trip to unlock planning details and booking assignments."
+- Disable all add/edit/delete interactions
+
+**AI Planner card**: Still visible (planning ahead is fine), but saving drafts is allowed since they're just drafts.
 
 ---
 
-## Technical Details
+## 3. Plan Tab - Unlocked State (funded_percent >= 1)
 
-### Chat Message State
+### Unlocked banner (replaces lock banner):
+- Title: "Bookings Unlocked"
+- Subtitle: "Organizer books. Everyone stays in sync."
+
+### Organizer Booking Cards (new component):
+For each of Flights, Stay, Experiences -- show an "Organizer Booking Card" at the top of that category section:
+
+- **Status badge**: Not Booked (gray) / In Progress (yellow) / Booked (green)
+- **Booking link** field (URL input, clickable when filled)
+- **Confirmation number** field (text input)
+- **Upload receipt** button (file upload to `trip-documents` bucket)
+- **Notes** field (multiline textarea)
+- **Save button** to upsert to `organizer_bookings`
+
+Only the organizer can edit these fields. Members see them read-only.
+
+### Existing booking items + itinerary
+Continue showing as-is (already working), now without the opacity/lock.
+
+---
+
+## 4. Fund Tab - "How This Works" Card
+
+### Add a card at the top of FundTab (before "Your Responsibility"):
+
 ```text
-chatMessages: Array<{
-  role: "ai" | "user"
-  content: string
-  questionIndex: number
-  options?: string[]       // for pill questions
-  multiSelect?: boolean
-}>
+Header: "How funding + booking works"
+Bullets:
+- "Everyone pays their share into the trip pool."
+- "When the trip hits 100% funded, bookings unlock."
+- "The organizer books flights/stay/experiences and posts confirmations and receipts here."
+
+Note: "Your payment is processed by Stripe. We never store your card details."
 ```
 
-### Question Flow Logic
-- `currentQuestion` starts at 0
-- When user selects/submits an answer:
-  1. Push a "user" message with their answer text
-  2. Update the corresponding `answers` field
-  3. Increment `currentQuestion`
-  4. Push the next "ai" question message (with slight delay for natural feel)
-- After question 5 (index 5) is answered, show "Generate My Plan" button
+---
 
-### Animation
-- Each new chat bubble uses framer-motion `initial={{ opacity: 0, y: 12 }}` / `animate={{ opacity: 1, y: 0 }}`.
-- Auto-scroll to bottom of chat container via `useRef` + `scrollIntoView`.
+## 5. Overview Tab - Clarity Lines
 
-### Progress Indicator
-- 6 small dots at the top of the sheet, filled up to `currentQuestion`.
+### Under Group Funding card:
+Add a small note below the progress bar:
+"Unlocks planning and booking checklist at 100% funded."
+
+### Under Trip Details card (TripDetailsCard):
+Add one line under "Per Person":
+"Per-person share updates automatically as members join."
+
+---
+
+## 6. Settings Tab - Trip Documents Section
+
+### New "Trip Documents" card (before Payment History):
+
+- Title: "Trip Documents"
+- List of uploaded documents (receipts, PDFs) with download links
+- Organizer: upload button (file picker) + title field
+- Members: view-only with download links
+- Delete button for organizer
+
+---
+
+## 7. Tab Switching for "Go to Fund"
+
+### Changes to `TripDashboard.tsx`:
+- Convert `Tabs` from uncontrolled (`defaultValue`) to controlled (`value` + `onValueChange`)
+- Pass `setActiveTab` to `PlanTab` so the "Go to Fund" button can switch tabs programmatically
+
+---
+
+## 8. Files to Create/Modify
+
+### New Files
+- `src/components/OrganizerBookingCard.tsx` - Booking status/link/receipt card per category
+- `src/components/TripDocumentsCard.tsx` - Upload/view receipts and docs
+
+### Modified Files
+- `src/components/tabs/PlanTab.tsx` - Locked/unlocked states, organizer booking cards, "Go to Fund" CTA
+- `src/components/tabs/FundTab.tsx` - "How this works" card + Stripe note
+- `src/components/tabs/OverviewTab.tsx` - Clarity lines under funding + trip details
+- `src/components/overview/TripDetailsCard.tsx` - "Per-person share updates automatically" line
+- `src/components/tabs/SettingsTab.tsx` - Trip Documents section
+- `src/pages/TripDashboard.tsx` - Controlled tab state, pass tab switcher to PlanTab
+
+---
+
+## 9. Microcopy (exact text)
+
+**Locked banner:**
+- "Bookings unlock at 100% funded."
+- "Once funded, the organizer will book everything and share confirmations here."
+
+**Locked category hint:**
+- "Fund the trip to unlock planning details and booking assignments."
+
+**Unlocked banner:**
+- "Bookings Unlocked"
+- "Organizer books. Everyone stays in sync."
+
+**Fund tab "How this works":**
+- "Everyone pays their share into the trip pool."
+- "When the trip hits 100% funded, bookings unlock."
+- "The organizer books flights/stay/experiences and posts confirmations and receipts here."
+- "Your payment is processed by Stripe. We never store your card details."
+
+**Overview - Group Funding:**
+- "Unlocks planning and booking checklist at 100% funded."
+
+**Overview - Per Person:**
+- "Per-person share updates automatically as members join."
+
+---
+
+## 10. Logic Summary
+
+All conditional rendering uses existing computed values from `useTripDashboard`:
+
+```text
+isFullyFunded = dashboard.funded_percent >= 1
+isOrganizer = dashboard.current_user?.role === "organizer"
+```
+
+- `!isFullyFunded` --> locked Plan UI + "Go to Fund" button
+- `isFullyFunded` --> unlocked Plan UI + organizer booking cards
+- `isOrganizer` --> can edit booking cards and upload receipts
+- `!isOrganizer` --> read-only view of booking cards and documents
 
