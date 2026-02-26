@@ -622,6 +622,35 @@ export type Database = {
       }
     }
     Functions: {
+      get_member_funding: {
+        Args: { p_trip_id: string }
+        Returns: {
+          amount_paid: number
+          amount_remaining: number
+          display_name: string
+          member_status: string
+          pct_complete: number
+          per_person_cost: number
+          role: string
+          trip_id: string
+          user_id: string
+        }[]
+      }
+      get_trip_funding_summary: {
+        Args: { p_trip_id: string }
+        Returns: {
+          days_to_deadline: number
+          member_count: number
+          payment_deadline: string
+          per_person_cost: number
+          percent_funded: number
+          total_cost: number
+          total_funded: number
+          total_remaining: number
+          trip_id: string
+          trip_name: string
+        }[]
+      }
       is_trip_member: {
         Args: { _trip_id: string; _user_id: string }
         Returns: boolean
@@ -630,6 +659,7 @@ export type Database = {
         Args: { _trip_id: string; _user_id: string }
         Returns: boolean
       }
+      recalc_trip_total: { Args: { p_trip_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

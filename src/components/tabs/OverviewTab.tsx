@@ -58,24 +58,24 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
     enabled: !!tripId,
   });
 
-  const { data: payments = [] } = useQuery({
-    queryKey: ["trip-payments-overview", tripId],
+  const { data: fundingSummary } = useQuery({
+    queryKey: ["trip-funding-summary", tripId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("payments").select("user_id, amount, amount_paid, status").eq("trip_id", tripId);
+      const { data, error } = await supabase.from("trip_funding_summary").select("*").eq("trip_id", tripId).maybeSingle();
       if (error) throw error;
       return data;
     },
     enabled: !!tripId,
   });
 
-  const { data: myPayment } = useQuery({
-    queryKey: ["my-payment", tripId, user?.id],
+  const { data: memberFunding = [] } = useQuery({
+    queryKey: ["member-funding", tripId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("payments").select("*").eq("trip_id", tripId).eq("user_id", user!.id).maybeSingle();
+      const { data, error } = await supabase.from("trip_member_funding").select("*").eq("trip_id", tripId);
       if (error) throw error;
       return data;
     },
-    enabled: !!tripId && !!user?.id,
+    enabled: !!tripId,
   });
 
   const { data: myProfile } = useQuery({
@@ -105,28 +105,25 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
   if (!trip) return null;
 
   const daysUntil = Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  const totalCost = Number((trip as any).total_cost) || 0;
-  const memberCount = members.length || 1;
-  const perPersonCost = totalCost / memberCount;
-  const totalFunded = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
-  const pctFunded = totalCost > 0 ? Math.round((totalFunded / totalCost) * 100) : 0;
+  const totalCost = Number(fundingSummary?.total_cost) || Number((trip as any).total_cost) || 0;
+  const perPersonCost = Number(fundingSummary?.per_person_cost) || (totalCost / Math.max(members.length, 1));
+  const totalFunded = Number(fundingSummary?.total_funded) || 0;
+  const pctFunded = Number(fundingSummary?.percent_funded) || 0;
 
-  const deadlineDays = trip.payment_deadline
+  const deadlineDays = fundingSummary?.days_to_deadline ?? (trip.payment_deadline
     ? Math.ceil((new Date(trip.payment_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
+    : null);
 
-  const myPaid = myPayment ? Number(myPayment.amount_paid) : 0;
-  const myRemaining = Math.max(0, perPersonCost - myPaid);
-  const myStatus = computeMemberStatus(myPaid, perPersonCost, deadlineDays);
+  const myFunding = memberFunding.find(m => m.user_id === user?.id);
+  const myPaid = Number(myFunding?.amount_paid) || 0;
+  const myRemaining = Math.max(0, Number(myFunding?.amount_remaining) || (perPersonCost - myPaid));
+  const myStatus = myFunding?.member_status || computeMemberStatus(myPaid, perPersonCost, deadlineDays);
 
-  // Trip Health
-  const lateCount = payments.filter((p) => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "Behind").length;
-  const onTrackCount = payments.filter((p) => {
-    const s = computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays);
-    return s === "Paid" || s === "On Track";
-  }).length;
-  const pctOnTrack = payments.length > 0 ? (onTrackCount / payments.length) * 100 : 100;
-  const health = computeTripHealth(pctFunded, pctOnTrack, deadlineDays, lateCount, payments.length);
+  // Trip Health from server-computed statuses
+  const lateCount = memberFunding.filter(m => m.member_status === "Behind").length;
+  const onTrackCount = memberFunding.filter(m => m.member_status === "Paid" || m.member_status === "On Track").length;
+  const pctOnTrack = memberFunding.length > 0 ? (onTrackCount / memberFunding.length) * 100 : 100;
+  const health = computeTripHealth(pctFunded, pctOnTrack, deadlineDays, lateCount, memberFunding.length);
 
   const handleRemoveMember = async (memberId: string) => {
     const { error } = await supabase.from("trip_members").delete().eq("id", memberId);
@@ -165,7 +162,8 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       await supabase.from("payments").insert({ trip_id: tripId, user_id: data.userId, amount: perPersonCost, amount_paid: 0 });
       toast({ title: "Member added", description: `${data.displayName} has been added to the trip` });
       queryClient.invalidateQueries({ queryKey: ["trip-members", tripId] });
-      queryClient.invalidateQueries({ queryKey: ["trip-payments-overview", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["member-funding", tripId] });
+      queryClient.invalidateQueries({ queryKey: ["trip-funding-summary", tripId] });
     } catch {
       toast({ title: "Error", description: "Failed to add member", variant: "destructive" });
     }
@@ -188,7 +186,7 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
         amountPaid={myPaid}
         remaining={myRemaining}
         paymentDeadline={trip.payment_deadline}
-        status={myStatus}
+        status={myStatus as "Behind" | "On Track" | "Paid"}
       />
 
       {/* 3. Group Status */}
@@ -201,8 +199,8 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
           </div>
           <Progress value={pctFunded} className="h-2 rounded-full" />
           <div className="flex gap-3 text-xs text-muted-foreground">
-            <span>{payments.filter(p => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "Paid").length} Paid</span>
-            <span>{payments.filter(p => computeMemberStatus(Number(p.amount_paid), perPersonCost, deadlineDays) === "On Track").length} On Track</span>
+            <span>{memberFunding.filter(m => m.member_status === "Paid").length} Paid</span>
+            <span>{memberFunding.filter(m => m.member_status === "On Track").length} On Track</span>
             <span>{lateCount} Behind</span>
           </div>
         </CardContent>
@@ -232,12 +230,12 @@ const OverviewTab = ({ tripId }: OverviewTabProps) => {
       )}
 
       {/* 4. Trip Details */}
-      <TripDetailsCard trip={trip} />
+      <TripDetailsCard trip={trip} computedPerPerson={perPersonCost} />
       <InviteCodeCard inviteCode={trip.invite_code} />
 
       {/* 5. Members */}
       <MembersCard
-        members={members} payments={payments} isOrganizer={isOrganizer}
+        members={members} payments={memberFunding.map(m => ({ user_id: m.user_id || '', amount: Number(m.per_person_cost) || 0, amount_paid: Number(m.amount_paid) || 0, status: m.member_status || 'pending' }))} isOrganizer={isOrganizer}
         currentUserId={user?.id} onRemoveMember={handleRemoveMember}
         onToggleRole={handleToggleRole} onAddMember={handleAddMember}
         maxSpots={trip.max_spots || trip.group_size}
