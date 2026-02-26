@@ -22,25 +22,17 @@ serve(async (req) => {
   }
 
   try {
-    // ---- 1. Authenticate the calling user from JWT ----
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return _json({ error: "Missing Authorization header" }, 401);
-    }
-
+    // ---- 1. Authenticate via Supabase auth context ----
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } },
+      { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
     );
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      return _json({ error: "Invalid or expired token" }, 401);
+    if (authError || !user) {
+      return _json({ error: "Unauthorized" }, 401);
     }
 
     // ---- 2. Parse & validate body ----
