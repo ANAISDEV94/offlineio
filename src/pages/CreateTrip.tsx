@@ -19,7 +19,55 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
-const steps = ["Trip Type", "Destination", "Dates", "Details", "Vibe", "Budget"];
+const tripTemplates = [
+  {
+    name: "Soft Girl Summer",
+    emoji: "🌸",
+    budget: 3000,
+    vibes: ["luxury", "wellness"],
+    gradient: "from-pink-200 to-rose-100",
+    description: "Beach, brunch & sunsets",
+    groupSize: 6,
+  },
+  {
+    name: "Birthday Reset",
+    emoji: "🎂",
+    budget: 4000,
+    vibes: ["luxury", "party"],
+    gradient: "from-amber-200 to-yellow-100",
+    description: "VIP, spa & nightlife",
+    groupSize: 8,
+  },
+  {
+    name: "Bachelorette Energy",
+    emoji: "💍",
+    budget: 3500,
+    vibes: ["party", "romantic"],
+    gradient: "from-fuchsia-200 to-pink-100",
+    description: "Pool party, matching outfits",
+    groupSize: 10,
+  },
+  {
+    name: "Girls Gone Global",
+    emoji: "🌍",
+    budget: 5000,
+    vibes: ["cultural", "foodie"],
+    gradient: "from-teal-200 to-cyan-100",
+    description: "Culture, food tours & landmarks",
+    groupSize: 6,
+  },
+  {
+    name: "Healing Escape",
+    emoji: "🧘‍♀️",
+    budget: 2500,
+    vibes: ["wellness", "adventure"],
+    gradient: "from-green-200 to-emerald-100",
+    description: "Yoga, nature & journaling",
+    groupSize: 4,
+  },
+];
+
+const steps = ["Template", "Trip Type", "Destination", "Dates", "Details", "Vibe", "Budget"];
 
 const CreateTrip = () => {
   const [step, setStep] = useState(0);
@@ -45,6 +93,7 @@ const CreateTrip = () => {
   const [destOpen, setDestOpen] = useState(false);
   const [destSearch, setDestSearch] = useState("");
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -86,6 +135,19 @@ const CreateTrip = () => {
     setCoverPreview(URL.createObjectURL(file));
   };
 
+  const applyTemplate = (templateName: string) => {
+    const template = tripTemplates.find(t => t.name === templateName);
+    if (!template) return;
+    setSelectedTemplate(templateName);
+    setForm(prev => ({
+      ...prev,
+      vibes: template.vibes,
+      perPersonBudget: template.budget,
+      groupSize: template.groupSize,
+      name: template.name,
+    }));
+  };
+
   const handleCreate = async () => {
     if (!user) return;
     setCreating(true);
@@ -98,9 +160,7 @@ const CreateTrip = () => {
       if (form.visibility === "public" && form.coverImage) {
         const ext = form.coverImage.name.split(".").pop();
         const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage
-          .from("trip-covers")
-          .upload(path, form.coverImage);
+        const { error: uploadErr } = await supabase.storage.from("trip-covers").upload(path, form.coverImage);
         if (uploadErr) throw uploadErr;
         const { data: urlData } = supabase.storage.from("trip-covers").getPublicUrl(path);
         coverImageUrl = urlData.publicUrl;
@@ -124,8 +184,7 @@ const CreateTrip = () => {
           max_spots: form.visibility === "public" ? form.maxSpots : null,
           min_spots_required: form.visibility === "public" ? form.minSpotsRequired : null,
           join_deadline: form.visibility === "public" && form.joinDeadline
-            ? format(form.joinDeadline, "yyyy-MM-dd")
-            : null,
+            ? format(form.joinDeadline, "yyyy-MM-dd") : null,
           cover_image_url: coverImageUrl,
         } as any)
         .select("id")
@@ -135,19 +194,11 @@ const CreateTrip = () => {
 
       const tripId = insertData.id;
 
-      await supabase.from("trip_members").insert({
-        trip_id: tripId,
-        user_id: user.id,
-        role: "organizer",
-      });
+      await supabase.from("trip_members").insert({ trip_id: tripId, user_id: user.id, role: "organizer" });
 
       const defaultCategories = ["Hotel", "Flights", "Activities", "Food", "Buffer"];
       await supabase.from("budget_categories").insert(
-        defaultCategories.map((name) => ({
-          trip_id: tripId,
-          name,
-          amount: 0,
-        }))
+        defaultCategories.map((name) => ({ trip_id: tripId, name, amount: 0 }))
       );
 
       if (form.visibility === "public") {
@@ -170,12 +221,13 @@ const CreateTrip = () => {
 
   const canNext = () => {
     switch (step) {
-      case 0: return true;
-      case 1: return form.destination.trim().length > 0;
-      case 2: return form.startDate && form.endDate;
-      case 3: return form.visibility === "public" ? form.maxSpots >= 2 : form.groupSize > 1;
-      case 4: return form.vibes.length > 0;
-      case 5: return form.perPersonBudget > 0;
+      case 0: return true; // Template is optional
+      case 1: return true;
+      case 2: return form.destination.trim().length > 0;
+      case 3: return form.startDate && form.endDate;
+      case 4: return form.visibility === "public" ? form.maxSpots >= 2 : form.groupSize > 1;
+      case 5: return form.vibes.length > 0;
+      case 6: return form.perPersonBudget > 0;
       default: return true;
     }
   };
@@ -208,8 +260,44 @@ const CreateTrip = () => {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {/* Step 0: Trip Type */}
+            {/* Step 0: Template Selection */}
             {step === 0 && (
+              <div className="space-y-6">
+                <div className="text-center mb-6">
+                  <span className="text-4xl">✨</span>
+                  <h2 className="text-2xl font-display font-semibold mt-3">Start from a Template</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Pick one to pre-fill your trip, or skip to start fresh</p>
+                </div>
+                <div className="space-y-3">
+                  {tripTemplates.map((t) => (
+                    <Card
+                      key={t.name}
+                      className={`cursor-pointer border-2 transition-all overflow-hidden ${
+                        selectedTemplate === t.name ? "border-primary shadow-md" : "border-transparent hover:border-muted"
+                      }`}
+                      onClick={() => applyTemplate(t.name === selectedTemplate ? "" : t.name)}
+                    >
+                      <CardContent className={`p-0`}>
+                        <div className={`bg-gradient-to-r ${t.gradient} p-4 flex items-center gap-4`}>
+                          <span className="text-3xl">{t.emoji}</span>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-foreground">{t.name}</p>
+                            <p className="text-xs text-foreground/70">{t.description}</p>
+                            <p className="text-[10px] text-foreground/50 mt-1">${t.budget.toLocaleString()}/person · {t.groupSize} people</p>
+                          </div>
+                          {selectedTemplate === t.name && (
+                            <Check className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Trip Type */}
+            {step === 1 && (
               <div className="space-y-8">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌟</span>
@@ -220,9 +308,7 @@ const CreateTrip = () => {
                 <div className="grid grid-cols-2 gap-3">
                   <Card
                     className={`cursor-pointer border-2 transition-all ${
-                      form.visibility === "private"
-                        ? "border-primary shadow-sm"
-                        : "border-transparent hover:border-muted"
+                      form.visibility === "private" ? "border-primary shadow-sm" : "border-transparent hover:border-muted"
                     }`}
                     onClick={() => update("visibility", "private")}
                   >
@@ -234,9 +320,7 @@ const CreateTrip = () => {
                   </Card>
                   <Card
                     className={`cursor-pointer border-2 transition-all ${
-                      form.visibility === "public"
-                        ? "border-primary shadow-sm"
-                        : "border-transparent hover:border-muted"
+                      form.visibility === "public" ? "border-primary shadow-sm" : "border-transparent hover:border-muted"
                     }`}
                     onClick={() => update("visibility", "public")}
                   >
@@ -250,63 +334,28 @@ const CreateTrip = () => {
 
                 <AnimatePresence>
                   {form.visibility === "public" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="space-y-4 overflow-hidden"
-                    >
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
                       <div className="space-y-2">
                         <Label>Host Name</Label>
-                        <Input
-                          placeholder={effectiveHostName || "Your name"}
-                          value={form.hostName}
-                          onChange={e => update("hostName", e.target.value)}
-                          className="rounded-xl"
-                        />
+                        <Input placeholder={effectiveHostName || "Your name"} value={form.hostName} onChange={e => update("hostName", e.target.value)} className="rounded-xl" />
                         <p className="text-[10px] text-muted-foreground">Pre-filled from your profile</p>
                       </div>
                       <div className="space-y-2">
                         <Label>Host Bio <span className="text-muted-foreground">({form.hostBio.length}/160)</span></Label>
-                        <Textarea
-                          placeholder="Travel enthusiast, group trip organizer..."
-                          value={form.hostBio}
-                          onChange={e => update("hostBio", e.target.value.slice(0, 160))}
-                          className="rounded-xl resize-none"
-                          rows={2}
-                        />
+                        <Textarea placeholder="Travel enthusiast, group trip organizer..." value={form.hostBio} onChange={e => update("hostBio", e.target.value.slice(0, 160))} className="rounded-xl resize-none" rows={2} />
                       </div>
                       <div className="space-y-2">
                         <Label>Trip Description</Label>
-                        <Textarea
-                          placeholder="Describe the experience you're creating..."
-                          value={form.tripDescription}
-                          onChange={e => update("tripDescription", e.target.value)}
-                          className="rounded-xl resize-none"
-                          rows={3}
-                        />
+                        <Textarea placeholder="Describe the experience you're creating..." value={form.tripDescription} onChange={e => update("tripDescription", e.target.value)} className="rounded-xl resize-none" rows={3} />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label>Max Spots</Label>
-                          <Input
-                            type="number"
-                            min={2}
-                            value={form.maxSpots}
-                            onChange={e => update("maxSpots", Number(e.target.value))}
-                            className="rounded-xl"
-                          />
+                          <Input type="number" min={2} value={form.maxSpots} onChange={e => update("maxSpots", Number(e.target.value))} className="rounded-xl" />
                         </div>
                         <div className="space-y-2">
                           <Label>Min Required</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={form.maxSpots}
-                            value={form.minSpotsRequired}
-                            onChange={e => update("minSpotsRequired", Math.min(Number(e.target.value), form.maxSpots))}
-                            className="rounded-xl"
-                          />
+                          <Input type="number" min={1} max={form.maxSpots} value={form.minSpotsRequired} onChange={e => update("minSpotsRequired", Math.min(Number(e.target.value), form.maxSpots))} className="rounded-xl" />
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -319,14 +368,7 @@ const CreateTrip = () => {
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={form.joinDeadline}
-                              onSelect={(d) => update("joinDeadline", d)}
-                              disabled={(date) => date < new Date()}
-                              initialFocus
-                              className={cn("p-3 pointer-events-auto")}
-                            />
+                            <Calendar mode="single" selected={form.joinDeadline} onSelect={(d) => update("joinDeadline", d)} disabled={(date) => date < new Date()} initialFocus className={cn("p-3 pointer-events-auto")} />
                           </PopoverContent>
                         </Popover>
                       </div>
@@ -350,8 +392,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {/* Step 1: Destination */}
-            {step === 1 && (
+            {/* Step 2: Destination */}
+            {step === 2 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">🌍</span>
@@ -360,12 +402,7 @@ const CreateTrip = () => {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Trip Name</Label>
-                    <Input
-                      placeholder="Summer 2026 Trip"
-                      value={form.name}
-                      onChange={e => update("name", e.target.value)}
-                      className="rounded-xl"
-                    />
+                    <Input placeholder="Summer 2026 Trip" value={form.name} onChange={e => update("name", e.target.value)} className="rounded-xl" />
                   </div>
                   <div className="space-y-2">
                     <Label>Destination</Label>
@@ -384,15 +421,7 @@ const CreateTrip = () => {
                               {filteredDestinations.map((d) => {
                                 const label = `${d.city}, ${d.country} ${d.emoji}`;
                                 return (
-                                  <CommandItem
-                                    key={`${d.city}-${d.country}`}
-                                    value={label}
-                                    onSelect={() => {
-                                      update("destination", `${d.city}, ${d.country}`);
-                                      setDestOpen(false);
-                                      setDestSearch("");
-                                    }}
-                                  >
+                                  <CommandItem key={`${d.city}-${d.country}`} value={label} onSelect={() => { update("destination", `${d.city}, ${d.country}`); setDestOpen(false); setDestSearch(""); }}>
                                     <span>{d.emoji}</span>
                                     <span className="ml-2">{d.city}, {d.country}</span>
                                   </CommandItem>
@@ -408,8 +437,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {/* Step 2: Dates */}
-            {step === 2 && (
+            {/* Step 3: Dates */}
+            {step === 3 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">📅</span>
@@ -428,8 +457,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {/* Step 3: Details */}
-            {step === 3 && (
+            {/* Step 4: Details */}
+            {step === 4 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">👥</span>
@@ -459,8 +488,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {/* Step 4: Vibe */}
-            {step === 4 && (
+            {/* Step 5: Vibe */}
+            {step === 5 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">✨</span>
@@ -474,9 +503,7 @@ const CreateTrip = () => {
                       <Card
                         key={v.value}
                         className={`cursor-pointer border-2 transition-all ${
-                          isSelected
-                            ? "border-primary shadow-sm"
-                            : "border-transparent hover:border-muted"
+                          isSelected ? "border-primary shadow-sm" : "border-transparent hover:border-muted"
                         }`}
                         onClick={() => toggleVibe(v.value)}
                       >
@@ -496,8 +523,8 @@ const CreateTrip = () => {
               </div>
             )}
 
-            {/* Step 5: Budget */}
-            {step === 5 && (
+            {/* Step 6: Budget */}
+            {step === 6 && (
               <div className="space-y-6">
                 <div className="text-center mb-6">
                   <span className="text-4xl">💰</span>
@@ -546,7 +573,7 @@ const CreateTrip = () => {
               disabled={!canNext()}
               className="flex-1 rounded-xl h-12 text-base font-medium"
             >
-              Next <ArrowRight className="ml-2 h-4 w-4" />
+              {step === 0 && !selectedTemplate ? "Skip — Start Fresh" : "Next"} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button

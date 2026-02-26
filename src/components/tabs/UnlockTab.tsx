@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
-import { Lock, Unlock, ExternalLink, Plane, Hotel, MapPin, Plus, Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { Lock, Unlock, ExternalLink, Plane, Hotel, MapPin, Plus, Loader2, Sparkles, AlertTriangle, Trash2, Pencil, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface UnlockTabProps {
@@ -28,6 +28,8 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [newBooking, setNewBooking] = useState({ title: "", category: "flight", url: "", notes: "", price: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", category: "", url: "", notes: "", price: "" });
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
@@ -85,13 +87,9 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
     mutationFn: async () => {
       if (!newBooking.title.trim() || !user) return;
       const { error } = await supabase.from("bookings").insert({
-        trip_id: tripId,
-        title: newBooking.title.trim(),
-        category: newBooking.category,
-        url: newBooking.url || null,
-        notes: newBooking.notes || null,
-        price: newBooking.price ? Number(newBooking.price) : null,
-        created_by: user.id,
+        trip_id: tripId, title: newBooking.title.trim(), category: newBooking.category,
+        url: newBooking.url || null, notes: newBooking.notes || null,
+        price: newBooking.price ? Number(newBooking.price) : null, created_by: user.id,
       });
       if (error) throw error;
     },
@@ -102,6 +100,30 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
       toast({ title: "Booking added" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteBooking = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("bookings").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["bookings", tripId] }); toast({ title: "Booking deleted" }); },
+  });
+
+  const updateBooking = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("bookings").update({
+        title: editForm.title, category: editForm.category,
+        url: editForm.url || null, notes: editForm.notes || null,
+        price: editForm.price ? Number(editForm.price) : null,
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings", tripId] });
+      setEditingId(null);
+      toast({ title: "Booking updated" });
+    },
   });
 
   if (isLoading) {
@@ -120,11 +142,8 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
               <h3 className="text-xl font-display font-semibold">Trip Not Activated</h3>
               <p className="text-sm text-muted-foreground">
                 The funding deadline passed before the minimum {minSpotsRequired} spots were funded.
-                Funds will be returned to all participants.
               </p>
-              <Badge variant="secondary" className="text-xs">
-                {fullyFundedMembers} / {minSpotsRequired} spots funded
-              </Badge>
+              <Badge variant="secondary" className="text-xs">{fullyFundedMembers} / {minSpotsRequired} spots funded</Badge>
             </CardContent>
           </Card>
         </motion.div>
@@ -147,14 +166,9 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
                   ? `Booking unlocks when ${minSpotsRequired} spots are fully funded.`
                   : "Booking unlocks when your trip is fully funded."}
               </p>
-              <Progress value={isPublic && minSpotsRequired
-                ? (fullyFundedMembers / minSpotsRequired) * 100
-                : pctFunded
-              } className="h-3" />
+              <Progress value={isPublic && minSpotsRequired ? (fullyFundedMembers / minSpotsRequired) * 100 : pctFunded} className="h-3" />
               <p className="text-sm font-medium">
-                {isPublic && minSpotsRequired
-                  ? `${fullyFundedMembers} / ${minSpotsRequired} spots funded`
-                  : `${pctFunded}% funded`}
+                {isPublic && minSpotsRequired ? `${fullyFundedMembers} / ${minSpotsRequired} spots funded` : `${pctFunded}% funded`}
               </p>
             </CardContent>
           </Card>
@@ -170,9 +184,7 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
         <Card className="border-0 shadow-sm bg-primary/5">
           <CardContent className="p-6 text-center">
-            <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 0.5 }}>
-              <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
-            </motion.div>
+            <Sparkles className="h-8 w-8 text-primary mx-auto mb-2" />
             <h3 className="text-lg font-display font-semibold flex items-center justify-center gap-2">
               <Unlock className="h-5 w-5" /> Booking Unlocked
             </h3>
@@ -230,17 +242,50 @@ const UnlockTab = ({ tripId }: UnlockTabProps) => {
                   <motion.div key={b.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                     <Card className="border-0 shadow-sm">
                       <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-1">
-                          <h4 className="font-medium text-sm">{b.title}</h4>
-                          {b.price && <Badge variant="secondary" className="text-xs">${b.price}</Badge>}
-                        </div>
-                        {b.notes && <p className="text-xs text-muted-foreground mb-3">{b.notes}</p>}
-                        {b.url && (
-                          <a href={b.url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline" size="sm" className="rounded-xl text-xs h-8">
-                              <ExternalLink className="h-3 w-3 mr-1" /> View & Book
-                            </Button>
-                          </a>
+                        {editingId === b.id ? (
+                          <div className="space-y-2">
+                            <Input value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} className="rounded-xl text-sm h-8" />
+                            <div className="flex gap-2">
+                              <Input value={editForm.url} onChange={e => setEditForm(p => ({ ...p, url: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" placeholder="URL" />
+                              <Input type="number" value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} className="rounded-xl text-sm h-8 w-24" placeholder="Price" />
+                            </div>
+                            <Input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Notes" />
+                            <div className="flex gap-1">
+                              <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateBooking.mutate(b.id)}>
+                                <Check className="h-3 w-3 mr-1" /> Save
+                              </Button>
+                              <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingId(null)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="font-medium text-sm">{b.title}</h4>
+                              <div className="flex items-center gap-1.5">
+                                {b.price && <Badge variant="secondary" className="text-xs">${b.price}</Badge>}
+                                {b.created_by === user?.id && (
+                                  <>
+                                    <button onClick={() => { setEditingId(b.id); setEditForm({ title: b.title, category: b.category, url: b.url || "", notes: b.notes || "", price: b.price ? String(b.price) : "" }); }}>
+                                      <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                                    </button>
+                                    <button onClick={() => deleteBooking.mutate(b.id)}>
+                                      <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            {b.notes && <p className="text-xs text-muted-foreground mb-3">{b.notes}</p>}
+                            {b.url && (
+                              <a href={b.url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline" size="sm" className="rounded-xl text-xs h-8">
+                                  <ExternalLink className="h-3 w-3 mr-1" /> View & Book
+                                </Button>
+                              </a>
+                            )}
+                          </>
                         )}
                       </CardContent>
                     </Card>

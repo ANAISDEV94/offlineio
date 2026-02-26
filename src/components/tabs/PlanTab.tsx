@@ -9,20 +9,25 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
-import { Plus, Loader2, Sparkles, ChevronDown, Crown, UserMinus, Send, Calendar } from "lucide-react";
+import { Plus, Loader2, ChevronDown, Crown, UserMinus, Send, Calendar, Trash2, Pencil, X, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PlanTabProps {
   tripId: string;
 }
 
-const tripTemplates = [
-  { name: "Soft Girl Summer", emoji: "🌸", budget: "2500-4000", vibes: ["Beach, brunch, sunsets"] },
-  { name: "Birthday Reset", emoji: "🎂", budget: "3000-5000", vibes: ["VIP, bottle service, spa day"] },
-  { name: "Bachelorette Energy", emoji: "💍", budget: "2000-4500", vibes: ["Pool party, nightlife, matching outfits"] },
-  { name: "Girls Gone Global", emoji: "🌍", budget: "4000-7000", vibes: ["Culture, food tours, landmarks"] },
-  { name: "Healing Escape", emoji: "🧘‍♀️", budget: "2000-3500", vibes: ["Yoga, meditation, nature, journaling"] },
-];
+const formatTime = (time: string | null) => {
+  if (!time) return "—";
+  try {
+    const [h, m] = time.split(":");
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${m} ${ampm}`;
+  } catch {
+    return time;
+  }
+};
 
 const PlanTab = ({ tripId }: PlanTabProps) => {
   const { user } = useAuth();
@@ -31,10 +36,15 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
   const [newActivity, setNewActivity] = useState("");
   const [newDay, setNewDay] = useState(1);
   const [newTime, setNewTime] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [hostControlsOpen, setHostControlsOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ activity: "", time: "", notes: "" });
+  const [editingBudget, setEditingBudget] = useState<string | null>(null);
+  const [budgetEditForm, setBudgetEditForm] = useState({ name: "", amount: "", spent: "" });
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatAmount, setNewCatAmount] = useState("");
 
   const { data: trip } = useQuery({
     queryKey: ["trip", tripId],
@@ -101,18 +111,10 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       const { data: members } = await supabase.from("trip_members").select("user_id").eq("trip_id", tripId);
       if (!members) return;
       await supabase.from("notifications").insert(
-        members.map(m => ({
-          trip_id: tripId,
-          user_id: m.user_id,
-          message: announcement.trim(),
-          type: "announcement",
-        }))
+        members.map(m => ({ trip_id: tripId, user_id: m.user_id, message: announcement.trim(), type: "announcement" }))
       );
     },
-    onSuccess: () => {
-      setAnnouncement("");
-      toast({ title: "Announcement sent" });
-    },
+    onSuccess: () => { setAnnouncement(""); toast({ title: "Announcement sent" }); },
   });
 
   const updateDeadline = useMutation({
@@ -120,10 +122,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
       if (!newDeadline) return;
       await supabase.from("trips").update({ payment_deadline: newDeadline } as any).eq("id", tripId);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
-      toast({ title: "Deadline updated" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["trip", tripId] }); toast({ title: "Deadline updated" }); },
   });
 
   const addItem = useMutation({
@@ -136,11 +135,69 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["itinerary-items", tripId] });
-      setNewActivity("");
-      setNewTime("");
+      setNewActivity(""); setNewTime("");
       toast({ title: "Added to itinerary" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteItem = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("itinerary_items").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["itinerary-items", tripId] }); toast({ title: "Item deleted" }); },
+  });
+
+  const updateItem = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("itinerary_items").update({
+        activity: editForm.activity, time: editForm.time || null, notes: editForm.notes || null,
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["itinerary-items", tripId] });
+      setEditingItem(null);
+      toast({ title: "Item updated" });
+    },
+  });
+
+  const addBudgetCategory = useMutation({
+    mutationFn: async () => {
+      if (!newCatName.trim()) return;
+      const { error } = await supabase.from("budget_categories").insert({
+        trip_id: tripId, name: newCatName.trim(), amount: Number(newCatAmount) || 0,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] });
+      setNewCatName(""); setNewCatAmount("");
+      toast({ title: "Category added" });
+    },
+  });
+
+  const deleteBudgetCategory = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("budget_categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] }); toast({ title: "Category deleted" }); },
+  });
+
+  const updateBudgetCategory = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("budget_categories").update({
+        name: budgetEditForm.name, amount: Number(budgetEditForm.amount), spent: Number(budgetEditForm.spent),
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["budget-categories", tripId] });
+      setEditingBudget(null);
+      toast({ title: "Category updated" });
+    },
   });
 
   const totalBudget = budgetCategories.reduce((s, b) => s + Number(b.amount), 0);
@@ -194,8 +251,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Participant Funding</p>
                   {memberPayments.map(m => {
                     const pct = m.payment && Number(m.payment.amount) > 0
-                      ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100)
-                      : 0;
+                      ? Math.round((Number(m.payment.amount_paid) / Number(m.payment.amount)) * 100) : 0;
                     return (
                       <div key={m.id} className="flex items-center justify-between py-1.5">
                         <div>
@@ -205,12 +261,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                         <div className="flex items-center gap-2">
                           <Progress value={pct} className="h-1.5 w-16" />
                           {m.user_id !== user?.id && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => removeMember.mutate(m.user_id)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeMember.mutate(m.user_id)}>
                               <UserMinus className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           )}
@@ -225,12 +276,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adjust Deadline</p>
                   <div className="flex gap-2">
-                    <Input
-                      type="date"
-                      value={newDeadline}
-                      onChange={e => setNewDeadline(e.target.value)}
-                      className="rounded-xl flex-1"
-                    />
+                    <Input type="date" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} className="rounded-xl flex-1" />
                     <Button size="sm" className="rounded-xl" onClick={() => updateDeadline.mutate()} disabled={!newDeadline}>
                       <Calendar className="h-3.5 w-3.5 mr-1" /> Update
                     </Button>
@@ -242,12 +288,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Send Announcement</p>
                   <div className="flex gap-2">
-                    <Input
-                      placeholder="Message to all members..."
-                      value={announcement}
-                      onChange={e => setAnnouncement(e.target.value)}
-                      className="rounded-xl flex-1"
-                    />
+                    <Input placeholder="Message to all members..." value={announcement} onChange={e => setAnnouncement(e.target.value)} className="rounded-xl flex-1" />
                     <Button size="sm" className="rounded-xl" onClick={() => sendAnnouncement.mutate()} disabled={!announcement.trim()}>
                       <Send className="h-3.5 w-3.5" />
                     </Button>
@@ -259,41 +300,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </Collapsible>
       )}
 
-      <div>
-        <h3 className="font-display font-medium text-base mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" /> Trip Templates
-        </h3>
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide">
-          {tripTemplates.map((t) => (
-            <Card
-              key={t.name}
-              className={`border-2 shrink-0 w-36 cursor-pointer transition-all ${
-                selectedTemplate === t.name ? "border-primary shadow-sm" : "border-transparent hover:border-muted"
-              }`}
-              onClick={() => setSelectedTemplate(selectedTemplate === t.name ? null : t.name)}
-            >
-              <CardContent className="p-3 text-center">
-                <span className="text-2xl">{t.emoji}</span>
-                <p className="text-xs font-medium mt-1">{t.name}</p>
-                <p className="text-[10px] text-muted-foreground">${t.budget}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        {selectedTemplate && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
-            <Card className="border-0 shadow-sm mt-2 bg-secondary/30">
-              <CardContent className="p-3">
-                <p className="text-xs font-medium">{selectedTemplate} Vibes:</p>
-                <p className="text-xs text-muted-foreground">
-                  {tripTemplates.find((t) => t.name === selectedTemplate)?.vibes.join(", ")}
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </div>
-
+      {/* Budget Breakdown */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
@@ -310,24 +317,63 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
             ) : (
               budgetCategories.map((b) => (
                 <div key={b.id}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>{b.name}</span>
-                    <span className="text-muted-foreground">${Number(b.spent)} / ${Number(b.amount)}</span>
-                  </div>
-                  <Progress value={Number(b.amount) > 0 ? (Number(b.spent) / Number(b.amount)) * 100 : 0} className="h-2" />
+                  {editingBudget === b.id ? (
+                    <div className="space-y-2 p-2 rounded-xl bg-muted/50">
+                      <Input value={budgetEditForm.name} onChange={e => setBudgetEditForm(p => ({ ...p, name: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Name" />
+                      <div className="flex gap-2">
+                        <Input type="number" value={budgetEditForm.amount} onChange={e => setBudgetEditForm(p => ({ ...p, amount: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" placeholder="Budget" />
+                        <Input type="number" value={budgetEditForm.spent} onChange={e => setBudgetEditForm(p => ({ ...p, spent: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" placeholder="Spent" />
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateBudgetCategory.mutate(b.id)}>
+                          <Check className="h-3 w-3 mr-1" /> Save
+                        </Button>
+                        <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingBudget(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="group">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>{b.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">${Number(b.spent)} / ${Number(b.amount)}</span>
+                          <button onClick={() => { setEditingBudget(b.id); setBudgetEditForm({ name: b.name, amount: String(b.amount), spent: String(b.spent) }); }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                          </button>
+                          <button onClick={() => deleteBudgetCategory.mutate(b.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        </div>
+                      </div>
+                      <Progress value={Number(b.amount) > 0 ? (Number(b.spent) / Number(b.amount)) * 100 : 0} className="h-2" />
+                    </div>
+                  )}
                 </div>
               ))
             )}
+            {/* Add new category */}
+            <div className="flex gap-2 pt-2 border-t border-border">
+              <Input placeholder="Category name" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="rounded-xl text-sm h-8 flex-1" />
+              <Input type="number" placeholder="Amount" value={newCatAmount} onChange={e => setNewCatAmount(e.target.value)} className="rounded-xl text-sm h-8 w-24" />
+              <Button size="sm" className="rounded-xl h-8" onClick={() => addBudgetCategory.mutate()} disabled={!newCatName.trim()}>
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </motion.div>
 
+      {/* Add to Itinerary */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4 space-y-3">
           <p className="text-sm font-medium">Add to Itinerary</p>
           <div className="flex gap-2">
             <Input type="number" min={1} value={newDay} onChange={(e) => setNewDay(Number(e.target.value))} className="rounded-xl w-20" placeholder="Day" />
-            <Input value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-24" placeholder="Time" />
+            <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl w-28" />
             <Input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem.mutate()} className="rounded-xl flex-1" placeholder="Activity..." />
             <Button onClick={() => addItem.mutate()} size="icon" className="rounded-xl shrink-0" disabled={addItem.isPending}>
               <Plus className="h-4 w-4" />
@@ -336,6 +382,7 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
         </CardContent>
       </Card>
 
+      {/* Day-by-Day Itinerary */}
       {Object.keys(days).length > 0 ? (
         <div>
           <h3 className="font-display font-medium text-lg mb-3">Day-by-Day Itinerary</h3>
@@ -346,12 +393,40 @@ const PlanTab = ({ tripId }: PlanTabProps) => {
                   <CardHeader className="pb-2"><CardTitle className="text-base font-display font-medium">Day {day}</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     {items.map((item) => (
-                      <div key={item.id} className="flex gap-3">
-                        <div className="text-xs text-muted-foreground w-16 pt-0.5 shrink-0">{item.time || "—"}</div>
-                        <div>
-                          <p className="text-sm font-medium">{item.activity}</p>
-                          {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
-                        </div>
+                      <div key={item.id}>
+                        {editingItem === item.id ? (
+                          <div className="space-y-2 p-2 rounded-xl bg-muted/50">
+                            <div className="flex gap-2">
+                              <Input type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} className="rounded-xl text-sm h-8 w-28" />
+                              <Input value={editForm.activity} onChange={e => setEditForm(p => ({ ...p, activity: e.target.value }))} className="rounded-xl text-sm h-8 flex-1" />
+                            </div>
+                            <Input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="rounded-xl text-sm h-8" placeholder="Notes..." />
+                            <div className="flex gap-1">
+                              <Button size="sm" className="rounded-xl h-7 text-xs" onClick={() => updateItem.mutate(item.id)}>
+                                <Check className="h-3 w-3 mr-1" /> Save
+                              </Button>
+                              <Button size="sm" variant="ghost" className="rounded-xl h-7 text-xs" onClick={() => setEditingItem(null)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3 group">
+                            <div className="text-xs text-primary font-medium w-16 pt-0.5 shrink-0">{formatTime(item.time)}</div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{item.activity}</p>
+                              {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                            </div>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => { setEditingItem(item.id); setEditForm({ activity: item.activity, time: item.time || "", notes: item.notes || "" }); }}>
+                                <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                              </button>
+                              <button onClick={() => deleteItem.mutate(item.id)}>
+                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </CardContent>
