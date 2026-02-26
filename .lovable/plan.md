@@ -1,34 +1,29 @@
 
 
-## Plan: Add Boot-Time Debug Log and Verify Edge Function Deployment
-
-### Problem
-The frontend is already correctly wired to project `seruyblflufhgandrxsf` via auto-managed `.env` and `client.ts` files. If edge functions were deployed to a different project (`ajwc...`), that's a separate deployment -- the functions in THIS project's `supabase/functions/` folder are auto-deployed to `seruyblflufhgandrxsf`.
+## Plan: Add Unmissable Boot Debug Logs
 
 ### Changes
 
-**1. Add console log on app boot (`src/main.tsx`)**
-
-Add a single debug log after imports to print the active Supabase URL:
+**1. `src/main.tsx`** — Replace the existing single log with three detailed logs:
 
 ```typescript
-console.log("[App Boot] VITE_SUPABASE_URL:", import.meta.env.VITE_SUPABASE_URL);
+console.log("[App Boot] VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
+console.log("[App Boot] VITE_SUPABASE_ANON_KEY starts with =", (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "").slice(0, 12));
+console.log("[App Boot] Edge invoke target =", import.meta.env.VITE_SUPABASE_URL + "/functions/v1/");
 ```
 
-This lets you verify in the browser console which project the client connects to.
+Note: The env var is `VITE_SUPABASE_PUBLISHABLE_KEY` (not `ANON_KEY`) per this project's `.env`. The third log constructs the full edge function base URL so you can see exactly where `supabase.functions.invoke` will send requests.
 
-**2. Re-deploy edge functions to this project**
+**2. `src/components/tabs/FundTab.tsx`** — In the Contribute button's `onClick` handler, add one log right before the invoke call (before the existing `console.log("[Contribute] payload:", payload)` line):
 
-Trigger redeployment of `create-checkout` and `stripe-webhook` to ensure they are live on `seruyblflufhgandrxsf` (not only on some other project).
+```typescript
+console.log("[Contribute] invoking create-checkout on", import.meta.env.VITE_SUPABASE_URL);
+```
 
 ### Files Modified
 | File | Change |
 |------|--------|
-| `src/main.tsx` | Add one `console.log` line to print `VITE_SUPABASE_URL` at boot |
+| `src/main.tsx` | Replace single log with 3 detailed boot logs |
+| `src/components/tabs/FundTab.tsx` | Add 1 log before `supabase.functions.invoke` call |
 
-### No Changes To
-- `.env` (auto-managed)
-- `client.ts` (auto-generated)
-- Edge function code (already correct)
-- UI/styling
-
+No other logic, styling, or backend changes.
