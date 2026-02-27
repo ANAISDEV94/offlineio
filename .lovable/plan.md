@@ -1,84 +1,52 @@
 
 
-# Fix Draft Plan Item Management (Approve, Edit, Delete, Restore)
+# Fix Budget Sync, Mobile Zoom, and Vibe Label
 
-## Problems
+## 3 Issues to Fix
 
-1. **Misleading icon**: The CheckCircle icon next to draft items looks like a "done/delete" button. When clicked, it approves the item, which removes it from the draft list -- but the user thinks it got deleted.
-2. **Approved items disappear**: Once approved, items vanish from the "Draft Plan" section but never appear in the main itinerary (different database tables). There's no "Approved" section showing them.
-3. **No editing**: Users can't edit draft plan items (title, description, cost, time).
-4. **No delete + restore**: There's no way to intentionally delete a draft item, and no way to bring back something that was removed.
+### 1. Budget shows zero after trip creation
 
-## Plan
+**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
 
-### 1. Replace the CheckCircle icon with proper action buttons
-
-Each draft item will have two small buttons:
-- **Thumbs-up or "Approve" button** with a clear label/tooltip (green checkmark with "Approve" text)
-- **Trash icon** to delete/dismiss the item
-
-### 2. Show approved items in a separate section
-
-Add an "Approved" section below the "Draft Plan" section that displays items with `status = 'approved'`. This makes it clear that approving moves the item -- it doesn't delete it.
-
-### 3. Add inline editing for draft items
-
-When clicking a pencil/edit icon on a draft item, the row expands into editable fields (title, description, est_cost, time_block). Requires adding an UPDATE RLS policy or using an edge function since currently only organizers can update `trip_plan_items`.
-
-### 4. Add delete with undo (soft delete)
-
-- Clicking the trash icon sets the item status to `"dismissed"` instead of hard-deleting
-- Add a small "Dismissed items" collapsible at the bottom with a "Restore" button on each
-- Restoring sets the status back to `"draft"`
-
-### 5. Database migration
-
-Add the `"dismissed"` status support -- no schema change needed since `status` is a plain text column. Just need to update the RLS policy to allow organizers (and optionally creators) to update items to dismissed/draft status.
-
-## Technical Details
-
-### Files to modify
-
-| File | Changes |
-|------|---------|
-| `src/components/tabs/PlanTab.tsx` | Replace CheckCircle with labeled Approve + Trash buttons; add Approved section; add Dismissed/restore section; add inline edit mode for drafts |
-
-### New mutations needed in PlanTab
-
-- `dismissDraft`: updates `trip_plan_items.status` to `"dismissed"`
-- `restoreDraft`: updates `trip_plan_items.status` back to `"draft"`
-- `updateDraft`: updates title, description, est_cost, time_block on a draft item
-
-### Data filtering changes
-
-Currently:
+**Fix**: Calculate and include `total_cost` in the insert statement:
 ```
-draftBudgetItems = draftItems.filter(d => !d.day_number && d.status === "draft")
-draftItineraryItems = draftItems.filter(d => d.day_number && d.status === "draft")
+total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
 ```
 
-Add:
-```
-approvedBudgetItems = draftItems.filter(d => !d.day_number && d.status === "approved")
-approvedItineraryItems = draftItems.filter(d => d.day_number && d.status === "approved")
-dismissedItems = draftItems.filter(d => d.status === "dismissed")
-```
+This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
 
-### UI layout for each draft item
+### 2. Mobile zoom on input focus
 
-```text
-+-------------------------------------------------+
-| Morning  |  Visit the Louvre                    |
-|          |  Explore art galleries...            |
-|          |  ~$45                                |
-|          |  [Approve]  [Edit]  [Dismiss]        |
-+-------------------------------------------------+
+**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
+
+**Fix**: Update the viewport meta tag to:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 ```
 
-### Approved section appearance
+### 3. Vibe card shows "Life" next to the emoji
 
-Similar cards to draft but with a green "Approved" badge instead of "Draft", and only an "Undo" button to move back to draft.
+**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
 
-### Dismissed section
+**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
 
-A collapsible "Show dismissed items (3)" at the bottom with each item showing a "Restore" button.
+Updated `vibeOptions`:
+```typescript
+{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
+// same pattern for all options
+```
+
+Updated card rendering (replacing lines 516-517):
+```tsx
+<span className="text-2xl">{v.emoji}</span>
+<p className="text-sm font-medium mt-1">{v.label}</p>
+```
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
+| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
+| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+
