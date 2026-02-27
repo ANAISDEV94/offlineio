@@ -176,6 +176,7 @@ const CreateTrip = () => {
           group_size: form.visibility === "public" ? form.maxSpots : form.groupSize,
           vibe: vibeStr,
           per_person_budget: form.perPersonBudget,
+          total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize),
           payment_deadline: form.paymentDeadline || null,
           created_by: user.id,
           visibility: form.visibility,
@@ -513,8 +514,8 @@ const CreateTrip = () => {
                               <Check className="h-4 w-4 text-primary" />
                             </div>
                           )}
-                          <span className="text-2xl">{v.label.split(" ").slice(1).join(" ")}</span>
-                          <p className="text-sm font-medium mt-1">{v.label.split(" ")[0]}</p>
+                          <span className="text-2xl">{v.emoji}</span>
+                          <p className="text-sm font-medium mt-1">{v.label}</p>
                         </CardContent>
                       </Card>
                     );
