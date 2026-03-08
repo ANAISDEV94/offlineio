@@ -1,52 +1,28 @@
 
 
-# Fix Budget Sync, Mobile Zoom, and Vibe Label
+# Trip Drama Simulator Section
 
-## 3 Issues to Fix
+## What
 
-### 1. Budget shows zero after trip creation
+A new interactive section inserted between the AI Demo section (line 191) and the Value Props section (line 193) on the landing page. Users input trip details and get a humorous simulated breakdown of group trip money drama.
 
-**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+## New File: `src/components/landing/TripDramaSimulator.tsx`
 
-**Fix**: Calculate and include `total_cost` in the insert statement:
-```
-total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
-```
+Self-contained component with:
 
-This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
+- **Inputs**: Number of friends (slider or number input, 2-10), total trip cost (number input), "One person pays upfront" toggle (Switch)
+- **State**: `friends`, `totalCost`, `onePersonPays`, `result` (null until simulated), animation state
+- **"Simulate Trip" button** triggers the result display
+- **Result generation**: Deterministic-random using the inputs to produce 4-5 humorous lines:
+  - Splits cost per person, picks random names from a pool (Ashley, Maya, Samantha, Jordan, Keisha, etc.)
+  - One person "owes $X", one "hasn't paid yet", one "dropped out", final line shows "You are now covering $Y" (inflated amount due to dropout + non-payment)
+- **Result display**: Lines animate in staggered with `framer-motion`, each in a soft rounded card/bubble
+- **Final message**: "This is exactly why Offline exists. Plan trips without the money drama."
+- **CTA button**: "Start planning your trip instead" → navigates to `/auth`
+- **Design**: Matches brand — `bg-secondary/20` background, primary-colored accents, rounded cards, `font-display` headings, motion fadeUp animations. Mobile-responsive single column.
 
-### 2. Mobile zoom on input focus
+## Edit: `src/pages/LandingPage.tsx`
 
-**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
-
-**Fix**: Update the viewport meta tag to:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-```
-
-### 3. Vibe card shows "Life" next to the emoji
-
-**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
-
-**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
-
-Updated `vibeOptions`:
-```typescript
-{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
-// same pattern for all options
-```
-
-Updated card rendering (replacing lines 516-517):
-```tsx
-<span className="text-2xl">{v.emoji}</span>
-<p className="text-sm font-medium mt-1">{v.label}</p>
-```
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
-| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
-| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+- Import `TripDramaSimulator`
+- Insert `<TripDramaSimulator />` wrapped in a styled section between lines 191 and 193
 
