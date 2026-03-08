@@ -70,10 +70,10 @@ const WaitlistSignup = () => {
             Early Access
           </motion.p>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-semibold">
-            Join the private beta
+            Join Early Access
           </motion.h2>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground max-w-md mx-auto">
-            We're opening early access for groups planning trips in 2026. Get early access and help shape the product.
+            We're testing Offline with early users who want to plan group trips without the money drama. Leave your email to get updates and help shape the product.
           </motion.p>
         </motion.div>
 
