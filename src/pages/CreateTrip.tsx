@@ -249,7 +249,7 @@ const CreateTrip = () => {
             <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`} />
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Step {step + 1} of {steps.length} — {steps[step]}</p>
+        <p className="text-xs text-muted-foreground mt-2"><p className="text-xs text-muted-foreground mt-2">Step {step + 1} of {steps.length} - {steps[step]}</p></p>
       </div>
 
       <div className="px-4 pb-8">
