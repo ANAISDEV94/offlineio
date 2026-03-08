@@ -161,6 +161,9 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Trips Being Planned */}
+      <TripsBeingPlanned />
+
       {/* AI Demo */}
       <section className="py-20 md:py-28 bg-foreground/[0.03]">
         <div className="max-w-5xl mx-auto px-5">
