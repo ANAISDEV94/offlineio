@@ -221,7 +221,7 @@ const LandingPage = () => {
               { icon: Sparkles, title: "AI Trip Planner", desc: "Answer a few questions and get a fully personalized itinerary: activities, dining, logistics, tailored to your group." },
               { icon: CreditCard, title: "Payment Tracking", desc: "See who's paid, who hasn't, and what's left. Automated reminders keep everyone accountable without the drama." },
               { icon: Users, title: "Group Coordination", desc: "Invite members with a code, assign roles, set deadlines. Everyone stays on the same page." },
-              { icon: Shield, title: "Neutral Rules", desc: "The system enforces deadlines and payment rules — so the organizer doesn't have to be the bad guy." },
+              { icon: Shield, title: "Neutral Rules", desc: "The system enforces deadlines and payment rules so the organizer doesn't have to be the bad guy." },
               { icon: CalendarCheck, title: "Booking Hub", desc: "Track flights, hotels, and reservations in one dashboard. No more digging through group chats." },
               { icon: MapPin, title: "Curated Destinations", desc: "Browse trending destinations with vibe-matched suggestions for your crew." },
             ].map((item, i) => (
