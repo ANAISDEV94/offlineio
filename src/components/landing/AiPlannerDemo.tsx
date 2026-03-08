@@ -85,7 +85,7 @@ const AiPlannerDemo: React.FC = () => {
   const [visibleMessages, setVisibleMessages] = useState<ChatMessage[]>([]);
   const [hasPlayed, setHasPlayed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, margin: "-100px" });
 
   const playSequence = useCallback(() => {
@@ -107,7 +107,9 @@ const AiPlannerDemo: React.FC = () => {
   }, [isInView, hasPlayed, playSequence]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [visibleMessages]);
 
   const currentStep = visibleMessages.length;
@@ -127,7 +129,7 @@ const AiPlannerDemo: React.FC = () => {
         </div>
 
         {/* Chat area — fixed height to prevent layout shift */}
-        <div className="px-4 py-4 space-y-3 h-[380px] sm:h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
+        <div ref={chatContainerRef} className="px-4 py-4 space-y-3 h-[380px] sm:h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
           <AnimatePresence initial={false}>
             {visibleMessages.map((msg, i) => (
               <motion.div
@@ -174,7 +176,7 @@ const AiPlannerDemo: React.FC = () => {
               </motion.div>
             ))}
           </AnimatePresence>
-          <div ref={chatEndRef} />
+          
         </div>
 
         {/* Progress indicator */}
