@@ -57,7 +57,7 @@ const LandingPage = () => {
                 custom={1}
                 className="text-muted-foreground text-lg max-w-md"
               >
-                Plan together, split costs fairly, and travel with your girls — all in one place. No awkward Venmo requests. No spreadsheets.
+                Plan together, split costs fairly, and travel with your girls. All in one place. No awkward Venmo requests. No spreadsheets.
               </motion.p>
               <motion.div variants={fadeUp} custom={2} className="flex flex-wrap gap-3">
                 <Button size="lg" onClick={() => navigate("/auth")} className="rounded-full px-8 gap-2">
