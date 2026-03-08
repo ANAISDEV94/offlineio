@@ -84,8 +84,8 @@ const WaitlistSignup = () => {
             className="text-center space-y-3 py-8"
           >
             <CheckCircle2 className="h-10 w-10 text-primary mx-auto" />
-            <p className="font-display text-xl font-semibold">You're on the list.</p>
-            <p className="text-muted-foreground">We'll invite you soon.</p>
+            <p className="font-display text-xl font-semibold">You're on the list!</p>
+            <p className="text-muted-foreground">You can also explore the beta while we continue improving the experience.</p>
           </motion.div>
         ) : (
           <motion.form
