@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin } from "lucide-react";
+import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin, MessageSquare, ExternalLink } from "lucide-react";
 import AiPlannerDemo from "@/components/landing/AiPlannerDemo";
 import TripDramaSimulator from "@/components/landing/TripDramaSimulator";
 import WaitlistSignup from "@/components/landing/WaitlistSignup";
