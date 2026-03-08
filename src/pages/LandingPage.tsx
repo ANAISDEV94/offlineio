@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin } from "lucide-react";
+import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin, MessageSquare, ExternalLink } from "lucide-react";
 import AiPlannerDemo from "@/components/landing/AiPlannerDemo";
 import TripDramaSimulator from "@/components/landing/TripDramaSimulator";
 import WaitlistSignup from "@/components/landing/WaitlistSignup";
@@ -294,6 +294,39 @@ const LandingPage = () => {
             </div>
             <p className="text-xs text-muted-foreground">These are Stripe test credentials and will not charge a real card.</p>
           </div>
+        </div>
+      </section>
+
+      {/* Beta Feedback */}
+      <section className="py-16">
+        <div className="max-w-2xl mx-auto px-5">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="rounded-2xl bg-secondary/30 border border-border/40 p-8 text-center"
+          >
+            <motion.div variants={fadeUp} custom={0}>
+              <MessageSquare className="w-10 h-10 text-primary mx-auto mb-4" />
+            </motion.div>
+            <motion.h3 variants={fadeUp} custom={1} className="font-display text-2xl font-semibold mb-3">
+              Help Us Improve Offline
+            </motion.h3>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto mb-6">
+              Offline is currently in beta and we are actively improving the product. If you try it and have feedback, we would love to hear from you.
+            </motion.p>
+            <motion.div variants={fadeUp} custom={3}>
+              <Button asChild size="lg" className="rounded-full px-8 gap-2">
+                <a
+                  href="https://docs.google.com/forms/d/1pqhIixe81axBZQlQnXmCJhwhgaOpTRbpM3M07bOxjAY/edit"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Share Beta Feedback <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
