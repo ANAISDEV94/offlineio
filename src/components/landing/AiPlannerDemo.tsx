@@ -79,6 +79,8 @@ const fadeUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number] } },
 };
 
+const TOTAL_STEPS = SCRIPT.length;
+
 const AiPlannerDemo: React.FC = () => {
   const [visibleMessages, setVisibleMessages] = useState<ChatMessage[]>([]);
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -108,6 +110,8 @@ const AiPlannerDemo: React.FC = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [visibleMessages]);
 
+  const currentStep = visibleMessages.length;
+
   return (
     <div ref={containerRef} className="w-full max-w-lg mx-auto">
       <div className="rounded-2xl border border-border bg-card/60 backdrop-blur-sm overflow-hidden shadow-lg">
@@ -122,8 +126,8 @@ const AiPlannerDemo: React.FC = () => {
           </div>
         </div>
 
-        {/* Chat area */}
-        <div className="px-4 py-4 space-y-3 max-h-[420px] overflow-y-auto">
+        {/* Chat area — fixed height to prevent layout shift */}
+        <div className="px-4 py-4 space-y-3 h-[380px] sm:h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
           <AnimatePresence initial={false}>
             {visibleMessages.map((msg, i) => (
               <motion.div
@@ -171,6 +175,20 @@ const AiPlannerDemo: React.FC = () => {
             ))}
           </AnimatePresence>
           <div ref={chatEndRef} />
+        </div>
+
+        {/* Progress indicator */}
+        <div className="flex items-center justify-center gap-1.5 px-5 py-2.5 border-t border-border/60 bg-card/80">
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <motion.div
+              key={i}
+              className={`h-1.5 rounded-full transition-colors duration-300 ${
+                i < currentStep ? "bg-primary" : "bg-muted"
+              }`}
+              animate={{ width: i < currentStep ? 16 : 6 }}
+              transition={{ duration: 0.3 }}
+            />
+          ))}
         </div>
       </div>
     </div>
