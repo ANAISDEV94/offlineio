@@ -85,7 +85,7 @@ const AiPlannerDemo: React.FC = () => {
   const [visibleMessages, setVisibleMessages] = useState<ChatMessage[]>([]);
   const [hasPlayed, setHasPlayed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, margin: "-100px" });
 
   const playSequence = useCallback(() => {
