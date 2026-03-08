@@ -138,7 +138,7 @@ const SettingsTab = ({ tripId }: SettingsTabProps) => {
             <p className="text-sm font-medium flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 text-muted-foreground" /> Email
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{user?.email || "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5"><p className="text-xs text-muted-foreground mt-0.5">{user?.email || "-"}</p></p>
           </div>
         </CardContent>
       </Card>

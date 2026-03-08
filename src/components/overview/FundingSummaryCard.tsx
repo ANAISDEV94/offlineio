@@ -188,7 +188,7 @@ const FundingSummaryCard = ({
             {myRemaining > 0 ? (
               <Button className="rounded-xl gap-2 w-full" onClick={() => handlePay(myRemaining)} disabled={paying}>
                 {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                Pay Now — ${myRemaining.toLocaleString()}
+                Pay Now - ${myRemaining.toLocaleString()}
               </Button>
             ) : (
               <Badge className="bg-accent/20 text-foreground border-0 text-sm py-1.5 px-4">✓ Fully Paid</Badge>

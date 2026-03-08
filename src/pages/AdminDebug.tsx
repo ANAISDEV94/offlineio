@@ -17,7 +17,7 @@ const AdminDebug = () => {
   }>({ status: "loading" });
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-  let hostname = "—";
+  let hostname = "-";
   try {
     hostname = new URL(supabaseUrl).hostname;
   } catch {

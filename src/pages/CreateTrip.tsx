@@ -249,7 +249,7 @@ const CreateTrip = () => {
             <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`} />
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Step {step + 1} of {steps.length} — {steps[step]}</p>
+        <p className="text-xs text-muted-foreground mt-2"><p className="text-xs text-muted-foreground mt-2">Step {step + 1} of {steps.length} - {steps[step]}</p></p>
       </div>
 
       <div className="px-4 pb-8">
@@ -574,7 +574,7 @@ const CreateTrip = () => {
               disabled={!canNext()}
               className="flex-1 rounded-xl h-12 text-base font-medium"
             >
-              {step === 0 && !selectedTemplate ? "Skip — Start Fresh" : "Next"} <ArrowRight className="ml-2 h-4 w-4" />
+              {step === 0 && !selectedTemplate ? "Skip - Start Fresh" : "Next"} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button

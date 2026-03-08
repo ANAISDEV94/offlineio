@@ -57,7 +57,7 @@ const LandingPage = () => {
                 custom={1}
                 className="text-muted-foreground text-lg max-w-md"
               >
-                Plan together, split costs fairly, and travel with your girls — all in one place. No awkward Venmo requests. No spreadsheets.
+                Plan together, split costs fairly, and travel with your girls. All in one place. No awkward Venmo requests. No spreadsheets.
               </motion.p>
               <motion.div variants={fadeUp} custom={2} className="flex flex-wrap gap-3">
                 <Button size="lg" onClick={() => navigate("/auth")} className="rounded-full px-8 gap-2">
@@ -218,10 +218,10 @@ const LandingPage = () => {
             className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
           >
             {[
-              { icon: Sparkles, title: "AI Trip Planner", desc: "Answer a few questions and get a fully personalized itinerary — activities, dining, logistics — tailored to your group." },
+              { icon: Sparkles, title: "AI Trip Planner", desc: "Answer a few questions and get a fully personalized itinerary: activities, dining, logistics, tailored to your group." },
               { icon: CreditCard, title: "Payment Tracking", desc: "See who's paid, who hasn't, and what's left. Automated reminders keep everyone accountable without the drama." },
               { icon: Users, title: "Group Coordination", desc: "Invite members with a code, assign roles, set deadlines. Everyone stays on the same page." },
-              { icon: Shield, title: "Neutral Rules", desc: "The system enforces deadlines and payment rules — so the organizer doesn't have to be the bad guy." },
+              { icon: Shield, title: "Neutral Rules", desc: "The system enforces deadlines and payment rules so the organizer doesn't have to be the bad guy." },
               { icon: CalendarCheck, title: "Booking Hub", desc: "Track flights, hotels, and reservations in one dashboard. No more digging through group chats." },
               { icon: MapPin, title: "Curated Destinations", desc: "Browse trending destinations with vibe-matched suggestions for your crew." },
             ].map((item, i) => (
@@ -266,7 +266,7 @@ const LandingPage = () => {
             Travel with your girls. Leave the drama at home.
           </motion.h2>
           <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/80 text-lg mb-8 max-w-lg mx-auto">
-            offline handles the planning, the payments, and the coordination — so all you have to do is show up.
+            offline handles the planning, the payments, and the coordination, so all you have to do is show up.
           </motion.p>
           <motion.div variants={fadeUp} custom={2}>
             <Button
