@@ -297,6 +297,39 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Beta Feedback */}
+      <section className="py-16">
+        <div className="max-w-2xl mx-auto px-5">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="rounded-2xl bg-secondary/30 border border-border/40 p-8 text-center"
+          >
+            <motion.div variants={fadeUp} custom={0}>
+              <MessageSquare className="w-10 h-10 text-primary mx-auto mb-4" />
+            </motion.div>
+            <motion.h3 variants={fadeUp} custom={1} className="font-display text-2xl font-semibold mb-3">
+              Help Us Improve Offline
+            </motion.h3>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto mb-6">
+              Offline is currently in beta and we are actively improving the product. If you try it and have feedback, we would love to hear from you.
+            </motion.p>
+            <motion.div variants={fadeUp} custom={3}>
+              <Button asChild size="lg" className="rounded-full px-8 gap-2">
+                <a
+                  href="https://docs.google.com/forms/d/1pqhIixe81axBZQlQnXmCJhwhgaOpTRbpM3M07bOxjAY/edit"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Share Beta Feedback <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Waitlist */}
       <WaitlistSignup />
 
