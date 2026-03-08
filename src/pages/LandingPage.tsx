@@ -157,6 +157,38 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* AI Demo */}
+      <section className="py-20 md:py-28 bg-foreground/[0.03]">
+        <div className="max-w-5xl mx-auto px-5">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-80px" }}
+            className="text-center mb-12"
+          >
+            <motion.p variants={fadeUp} custom={0} className="text-primary text-sm font-medium uppercase tracking-widest mb-3">
+              See It In Action
+            </motion.p>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-semibold">
+              Plan a Miami trip in under a minute
+            </motion.h2>
+          </motion.div>
+          <AiPlannerDemo />
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="text-center mt-10"
+          >
+            <motion.div variants={fadeUp} custom={0}>
+              <Button size="lg" onClick={() => navigate("/auth")} className="rounded-full px-8 gap-2">
+                Try It Yourself <ArrowRight className="h-4 w-4" />
+              </Button>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Value Props */}
       <section className="py-20 md:py-28 bg-secondary/40">
         <div className="max-w-5xl mx-auto px-5">
