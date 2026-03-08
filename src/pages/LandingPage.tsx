@@ -303,7 +303,7 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="py-10 border-t border-border/40">
         <div className="max-w-6xl mx-auto px-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src={logo} alt="offline" className="h-6" />
+          <img src={logo} alt="offline" className="h-9" />
           <div className="text-center sm:text-right space-y-1">
             <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} offline. All rights reserved.</p>
             <p className="text-xs text-muted-foreground/70">Offline is currently in beta. Features may change as we continue testing and improving the experience.</p>
