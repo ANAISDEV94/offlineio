@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin } from "lucide-react";
 import AiPlannerDemo from "@/components/landing/AiPlannerDemo";
+import TripDramaSimulator from "@/components/landing/TripDramaSimulator";
 import WaitlistSignup from "@/components/landing/WaitlistSignup";
 import logo from "@/assets/logo.png";
 import heroImg from "@/assets/hero-travel.jpg";
@@ -189,6 +190,9 @@ const LandingPage = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Trip Drama Simulator */}
+      <TripDramaSimulator />
 
       {/* Value Props */}
       <section className="py-20 md:py-28 bg-secondary/40">
