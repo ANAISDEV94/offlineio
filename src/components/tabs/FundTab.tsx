@@ -346,7 +346,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Trip Health</p>
-              <p className="text-xs text-muted-foreground">{dashboard.health_score}% — {dashboard.health_label}</p>
+              <p className="text-xs text-muted-foreground"><p className="text-xs text-muted-foreground">{dashboard.health_score}% - {dashboard.health_label}</p></p>
             </div>
             <Badge className={`text-[10px] border-0 ${
               dashboard.health_label === "Healthy" ? "bg-accent/20 text-accent" :
