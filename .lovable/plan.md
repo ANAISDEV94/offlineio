@@ -1,52 +1,63 @@
 
 
-# Fix Budget Sync, Mobile Zoom, and Vibe Label
+# AI Trip Planner Demo Section on Landing Page
 
-## 3 Issues to Fix
+## Concept
 
-### 1. Budget shows zero after trip creation
+Add an interactive, scripted demo section between the "How It Works" and "Value Props" sections on the landing page. It shows a simulated conversation with the trip planner for a Miami Beach trip — pre-scripted messages that animate in sequence, giving visitors a feel for the real product without needing to sign up.
 
-**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+**Not** using the full `PromptInputBox` component from the prompt — it's a generic AI chat input with voice recording, search/think/canvas toggles that don't fit this context. Instead, building a lightweight, brand-styled chat demo that mirrors the actual `AiTripPlanner` wizard UX (question → pill answer → next question → generated plan preview).
 
-**Fix**: Calculate and include `total_cost` in the insert statement:
-```
-total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
-```
+## Demo Flow (Scripted)
 
-This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
+The demo auto-plays a conversation for a Miami Beach girls' trip:
 
-### 2. Mobile zoom on input focus
+```text
+AI: "What kind of stay are you feeling?"
+    [Budget] [Mid-range] [Luxury] [Unique stays]
+User: "Luxury" (auto-selected after delay)
 
-**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
+AI: "What do you want to do there?"
+    [Adventure] [Culture] [Food] [Relaxation] [Nightlife]
+User: "Food, Relaxation, Nightlife"
 
-**Fix**: Update the viewport meta tag to:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-```
+AI: "How packed should your days be?"
+User: "Balanced"
 
-### 3. Vibe card shows "Life" next to the emoji
+AI: ✨ Generating your Miami Beach plan...
 
-**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
-
-**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
-
-Updated `vibeOptions`:
-```typescript
-{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
-// same pattern for all options
+→ Mini plan card appears showing:
+  - Day 1: South Beach & Brunch ($85)
+  - Day 2: Spa Day & Wynwood ($120)
+  - Day 3: Sunset Cruise & Nightlife ($150)
+  - Budget: ~$1,200/person
 ```
 
-Updated card rendering (replacing lines 516-517):
-```tsx
-<span className="text-2xl">{v.emoji}</span>
-<p className="text-sm font-medium mt-1">{v.label}</p>
-```
+Messages animate in with staggered delays. The whole sequence replays on a loop or can be triggered by scroll-into-view.
 
-## Files Changed
+## Design
+
+- Chat container styled to match the app's brand (soft background, rounded bubbles, primary-colored user messages)
+- Sits in a dark/contrasting section to stand out as a "product preview"
+- Section header: "See it in action" with subtext "Plan a Miami Beach trip in under a minute"
+- CTA at the bottom: "Try it yourself →" linking to `/auth`
+- Mobile: single column, chat takes full width
+
+## Files
 
 | File | Change |
 |------|--------|
-| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
-| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
-| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+| `src/components/landing/AiPlannerDemo.tsx` | New — self-contained scripted chat demo component |
+| `src/pages/LandingPage.tsx` | Insert demo section between "How It Works" and "Value Props" |
+
+## Component Structure (`AiPlannerDemo.tsx`)
+
+- Uses `useState` + `useEffect` with `setTimeout` chains to animate messages
+- `useInView` (intersection observer) triggers the animation when scrolled into view
+- Each message is a `motion.div` with fade-up animation
+- Pill buttons appear as static badges (not interactive — it's a demo)
+- The "selected" pill highlights after a delay to simulate user interaction
+- Plan result card appears at the end with a mini itinerary summary
+
+No new dependencies needed — uses existing `framer-motion`, `lucide-react`, and shadcn components.
 
