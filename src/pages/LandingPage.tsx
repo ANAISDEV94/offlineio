@@ -78,7 +78,7 @@ const LandingPage = () => {
               <div className="rounded-3xl overflow-hidden shadow-2xl shadow-primary/10">
                 <img
                   src={heroImg}
-                  alt="Women traveling together on a group trip"
+                  alt="Friends clinking champagne glasses on a yacht at golden hour"
                   className="w-full h-64 sm:h-80 md:h-96 object-cover"
                   loading="eager"
                 />
