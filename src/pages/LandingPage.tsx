@@ -318,7 +318,7 @@ const LandingPage = () => {
             <motion.div variants={fadeUp} custom={3}>
               <Button asChild size="lg" className="rounded-full px-8 gap-2">
                 <a
-                  href="https://docs.google.com/forms/d/1pqhIixe81axBZQlQnXmCJhwhgaOpTRbpM3M07bOxjAY/edit"
+                  href="https://forms.gle/r1mKqYKHBXSrC2Ba6"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
