@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import AdminDebug from "./pages/AdminDebug";
 import ResetPassword from "./pages/ResetPassword";
+import ScrollToTop from "./components/ScrollToTop";
 
 const queryClient = new QueryClient();
 
