@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
 import Onboarding from "@/components/Onboarding";
+import LandingPage from "@/pages/LandingPage";
 import logo from "@/assets/logo.png";
 
 const Index = () => {
@@ -18,7 +18,7 @@ const Index = () => {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <LandingPage />;
   }
 
   return <Onboarding />;
