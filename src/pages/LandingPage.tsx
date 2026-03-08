@@ -280,6 +280,23 @@ const LandingPage = () => {
         </motion.div>
       </section>
 
+      {/* Beta Payment Notice */}
+      <section className="py-10">
+        <div className="max-w-2xl mx-auto px-5">
+          <div className="rounded-2xl bg-secondary/30 border border-border/40 p-6 space-y-2">
+            <p className="font-medium text-sm">Beta Notice</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Offline is currently in testing mode. No real payments are being processed. If prompted for card information, please use Stripe's test card:
+            </p>
+            <div className="text-sm text-muted-foreground font-mono bg-background/60 rounded-lg p-3 space-y-1">
+              <p>Card: 4242 4242 4242 4242</p>
+              <p>Exp: any future date &nbsp;·&nbsp; CVC: any 3 digits &nbsp;·&nbsp; ZIP: any numbers</p>
+            </div>
+            <p className="text-xs text-muted-foreground">These are Stripe test credentials and will not charge a real card.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Waitlist */}
       <WaitlistSignup />
 
@@ -287,7 +304,10 @@ const LandingPage = () => {
       <footer className="py-10 border-t border-border/40">
         <div className="max-w-6xl mx-auto px-5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <img src={logo} alt="offline" className="h-6" />
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} offline. All rights reserved.</p>
+          <div className="text-center sm:text-right space-y-1">
+            <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} offline. All rights reserved.</p>
+            <p className="text-xs text-muted-foreground/70">Offline is currently in beta. Features may change as we continue testing and improving the experience.</p>
+          </div>
         </div>
       </footer>
     </div>

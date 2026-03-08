@@ -126,7 +126,7 @@ const WaitlistSignup = () => {
                 disabled={loading}
                 className="w-full rounded-full gap-2"
               >
-                {loading ? "Joining…" : "Get Early Access"} <ArrowRight className="h-4 w-4" />
+                {loading ? "Joining…" : "Join Early Access"} <ArrowRight className="h-4 w-4" />
               </Button>
             </motion.div>
           </motion.form>
