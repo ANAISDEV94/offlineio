@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin } from "lucide-react";
@@ -7,7 +7,7 @@ import logo from "@/assets/logo.png";
 import heroImg from "@/assets/hero-travel.jpg";
 import lifestyleImg from "@/assets/lifestyle-travel.jpg";
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: (i: number) => ({
     opacity: 1,
