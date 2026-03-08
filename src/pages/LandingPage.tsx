@@ -218,7 +218,7 @@ const LandingPage = () => {
             className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
           >
             {[
-              { icon: Sparkles, title: "AI Trip Planner", desc: "Answer a few questions and get a fully personalized itinerary — activities, dining, logistics — tailored to your group." },
+              { icon: Sparkles, title: "AI Trip Planner", desc: "Answer a few questions and get a fully personalized itinerary: activities, dining, logistics, tailored to your group." },
               { icon: CreditCard, title: "Payment Tracking", desc: "See who's paid, who hasn't, and what's left. Automated reminders keep everyone accountable without the drama." },
               { icon: Users, title: "Group Coordination", desc: "Invite members with a code, assign roles, set deadlines. Everyone stays on the same page." },
               { icon: Shield, title: "Neutral Rules", desc: "The system enforces deadlines and payment rules — so the organizer doesn't have to be the bad guy." },
