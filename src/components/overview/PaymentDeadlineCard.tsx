@@ -15,7 +15,7 @@ const PaymentDeadlineCard = ({ paymentDeadline, paymentDeadlineDays }: PaymentDe
         <p className="text-sm font-medium text-foreground">Payment Deadline</p>
         <p className="text-xs text-muted-foreground">
           {paymentDeadlineDays > 0
-            ? `${paymentDeadlineDays} ? `${paymentDeadlineDays} days left - ${format(new Date(paymentDeadline), "MMM d, yyyy")}`
+            ? `${paymentDeadlineDays} days left - ${format(new Date(paymentDeadline), "MMM d, yyyy")}`
             : "Deadline passed"}
         </p>
       </div>

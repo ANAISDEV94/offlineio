@@ -574,7 +574,7 @@ const CreateTrip = () => {
               disabled={!canNext()}
               className="flex-1 rounded-xl h-12 text-base font-medium"
             >
-              {step === 0 && !selectedTemplate ? {step === 0 && !selectedTemplate ? "Skip - Start Fresh" : "Next"} <ArrowRight className="ml-2 h-4 w-4" /> : "Next"} <ArrowRight className="ml-2 h-4 w-4" />
+              {step === 0 && !selectedTemplate ? "Skip - Start Fresh" : "Next"} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button
