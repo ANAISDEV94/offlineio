@@ -276,6 +276,9 @@ const LandingPage = () => {
         </motion.div>
       </section>
 
+      {/* Waitlist */}
+      <WaitlistSignup />
+
       {/* Footer */}
       <footer className="py-10 border-t border-border/40">
         <div className="max-w-6xl mx-auto px-5 flex flex-col sm:flex-row items-center justify-between gap-4">
