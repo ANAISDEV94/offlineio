@@ -192,6 +192,9 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Share Group Chat */}
+      <ShareGroupChat />
+
       {/* Trip Drama Simulator */}
       <TripDramaSimulator />
 
