@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Sparkles, CreditCard, Users, CalendarCheck, Shield, MapPin, MessageSquare, ExternalLink } from "lucide-react";
 import AiPlannerDemo from "@/components/landing/AiPlannerDemo";
 import TripDramaSimulator from "@/components/landing/TripDramaSimulator";
+import ShareGroupChat from "@/components/landing/ShareGroupChat";
 import WaitlistSignup from "@/components/landing/WaitlistSignup";
 import logo from "@/assets/logo.png";
 import heroImg from "@/assets/hero-travel.jpg";
