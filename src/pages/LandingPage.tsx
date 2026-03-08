@@ -7,6 +7,7 @@ import AiPlannerDemo from "@/components/landing/AiPlannerDemo";
 import TripDramaSimulator from "@/components/landing/TripDramaSimulator";
 import ShareGroupChat from "@/components/landing/ShareGroupChat";
 import WaitlistSignup from "@/components/landing/WaitlistSignup";
+import TripsBeingPlanned from "@/components/landing/TripsBeingPlanned";
 import logo from "@/assets/logo.png";
 import heroImg from "@/assets/hero-travel.jpg";
 import lifestyleImg from "@/assets/lifestyle-travel.jpg";
@@ -159,6 +160,9 @@ const LandingPage = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Trips Being Planned */}
+      <TripsBeingPlanned />
 
       {/* AI Demo */}
       <section className="py-20 md:py-28 bg-foreground/[0.03]">
