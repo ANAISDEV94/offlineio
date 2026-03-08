@@ -129,7 +129,7 @@ const AiPlannerDemo: React.FC = () => {
         </div>
 
         {/* Chat area — fixed height to prevent layout shift */}
-        <div className="px-4 py-4 space-y-3 h-[380px] sm:h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
+        <div ref={chatContainerRef} className="px-4 py-4 space-y-3 h-[380px] sm:h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
           <AnimatePresence initial={false}>
             {visibleMessages.map((msg, i) => (
               <motion.div
