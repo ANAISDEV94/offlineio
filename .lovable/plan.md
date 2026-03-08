@@ -1,52 +1,31 @@
 
 
-# Fix Budget Sync, Mobile Zoom, and Vibe Label
+# Add "Send to Your Group Chat" Sharing Section
 
-## 3 Issues to Fix
+## Placement
+After the AI Demo "See It In Action" section (line 192) and before the Trip Drama Simulator (line 194).
 
-### 1. Budget shows zero after trip creation
+## New Component: `src/components/landing/ShareGroupChat.tsx`
+A self-contained sharing section with:
+- Title: "Planning a trip with friends?"
+- Description text as specified
+- "Send to your group chat" primary button that opens a popover/dropdown with 4 options:
+  - **Copy link** — copies landing page URL (`https://offlineio.lovable.app`) to clipboard, shows toast confirmation
+  - **WhatsApp** — opens `https://wa.me/?text={encodedMessage + url}`
+  - **iMessage** — opens `sms:&body={encodedMessage + url}`
+  - **Instagram DM** — copies message to clipboard + shows toast "Message copied — paste it in Instagram DM" (no direct DM API available)
+- Default share message: `"We're planning our trip with Offline so no one has to chase people for money. Check it out. https://offlineio.lovable.app"`
+- Uses existing `Popover` component for the sharing options menu
+- Card layout with rounded edges, centered content, consistent with landing page style
+- Uses `motion` and existing `fadeUp` variants for animation consistency
+- Icons from lucide-react: `Share2`, `Copy`, `MessageCircle`, `Send`
 
-**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+## Edit: `src/pages/LandingPage.tsx`
+- Import `ShareGroupChat`
+- Insert `<ShareGroupChat />` between the AI Demo section and `<TripDramaSimulator />`
 
-**Fix**: Calculate and include `total_cost` in the insert statement:
-```
-total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
-```
-
-This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
-
-### 2. Mobile zoom on input focus
-
-**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
-
-**Fix**: Update the viewport meta tag to:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-```
-
-### 3. Vibe card shows "Life" next to the emoji
-
-**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
-
-**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
-
-Updated `vibeOptions`:
-```typescript
-{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
-// same pattern for all options
-```
-
-Updated card rendering (replacing lines 516-517):
-```tsx
-<span className="text-2xl">{v.emoji}</span>
-<p className="text-sm font-medium mt-1">{v.label}</p>
-```
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
-| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
-| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+## Design Details
+- Section uses `py-20 md:py-28` padding like other sections
+- Card uses `rounded-2xl bg-secondary/30 border border-border/40` matching existing Beta Notice / Feedback cards
+- Mobile-friendly: single column, full-width button, popover options stacked vertically
 
