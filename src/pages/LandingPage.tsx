@@ -191,6 +191,9 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Trip Drama Simulator */}
+      <TripDramaSimulator />
+
       {/* Value Props */}
       <section className="py-20 md:py-28 bg-secondary/40">
         <div className="max-w-5xl mx-auto px-5">
