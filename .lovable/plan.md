@@ -1,27 +1,52 @@
 
 
-# Make Landing Page Accessible to All Users
+# Fix Budget Sync, Mobile Zoom, and Vibe Label
 
-## Problem
-Currently, `Index.tsx` checks auth state and redirects signed-in users straight to the Onboarding component, hiding the landing page entirely.
+## 3 Issues to Fix
 
-## Solution
-Add a dedicated `/welcome` route that always renders the `LandingPage` component regardless of authentication status.
+### 1. Budget shows zero after trip creation
 
-## Changes
+**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
 
-**`src/App.tsx`**
-- Add route: `<Route path="/welcome" element={<LandingPage />} />`
+**Fix**: Calculate and include `total_cost` in the insert statement:
+```
+total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
+```
 
-**`src/pages/LandingPage.tsx`**
-- No changes needed — it already renders independently.
+This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
 
-**`src/components/Onboarding.tsx`** (optional)
-- Could add a small "View our website" link in the header that navigates to `/welcome`, so signed-in users can easily find the landing page.
+### 2. Mobile zoom on input focus
 
-## Behavior
-- `/` — same as today: signed-in users see Onboarding, visitors see Landing Page
-- `/welcome` — always shows Landing Page for anyone
+**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
 
-This is a two-line change at minimum (route + import if needed). The landing page CTA buttons ("Get Started", etc.) already link to `/auth`, so they'll continue working for both signed-in and signed-out users.
+**Fix**: Update the viewport meta tag to:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+```
+
+### 3. Vibe card shows "Life" next to the emoji
+
+**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
+
+**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
+
+Updated `vibeOptions`:
+```typescript
+{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
+// same pattern for all options
+```
+
+Updated card rendering (replacing lines 516-517):
+```tsx
+<span className="text-2xl">{v.emoji}</span>
+<p className="text-sm font-medium mt-1">{v.label}</p>
+```
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
+| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
+| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
 

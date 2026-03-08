@@ -11,6 +11,7 @@ import TripPreview from "./pages/TripPreview";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import AdminDebug from "./pages/AdminDebug";
+import LandingPage from "./pages/LandingPage";
 import ResetPassword from "./pages/ResetPassword";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -25,6 +26,7 @@ const App = () => (
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/welcome" element={<LandingPage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/create-trip" element={<CreateTrip />} />
