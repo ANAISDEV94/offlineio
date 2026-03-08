@@ -11,6 +11,7 @@ import TripPreview from "./pages/TripPreview";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import AdminDebug from "./pages/AdminDebug";
+import LandingPage from "./pages/LandingPage";
 import ResetPassword from "./pages/ResetPassword";
 import ScrollToTop from "./components/ScrollToTop";
 

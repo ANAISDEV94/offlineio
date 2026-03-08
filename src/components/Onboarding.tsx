@@ -110,7 +110,7 @@ const Onboarding = () => {
       </AnimatePresence>
       <div className="min-h-screen bg-background flex flex-col">
       <header className="p-4 flex items-center justify-between">
-        <img src={logo} alt="offline" className="h-8" />
+        <img src={logo} alt="offline" className="h-8 cursor-pointer" onClick={() => navigate("/welcome")} />
         <button onClick={signOut} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           Sign out
         </button>
