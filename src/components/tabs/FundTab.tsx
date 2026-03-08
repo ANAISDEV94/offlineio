@@ -396,7 +396,7 @@ const FundTab = ({ tripId }: FundTabProps) => {
               </Button>
               {myRemaining > 100 && installment.amount < myRemaining && (
                 <Button variant="outline" className="w-full rounded-xl gap-2" onClick={() => handlePay(installment.amount)} disabled={payingAmount !== null}>
-                  Pay Installment — ${installment.amount.toLocaleString()}
+                  Pay Installment - ${installment.amount.toLocaleString()}
                 </Button>
               )}
             </CardContent>

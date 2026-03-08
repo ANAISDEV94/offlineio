@@ -266,7 +266,7 @@ const LandingPage = () => {
             Travel with your girls. Leave the drama at home.
           </motion.h2>
           <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/80 text-lg mb-8 max-w-lg mx-auto">
-            offline handles the planning, the payments, and the coordination — so all you have to do is show up.
+            offline handles the planning, the payments, and the coordination, so all you have to do is show up.
           </motion.p>
           <motion.div variants={fadeUp} custom={2}>
             <Button

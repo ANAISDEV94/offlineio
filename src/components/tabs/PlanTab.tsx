@@ -355,7 +355,7 @@ const PlanTab = ({ tripId, onSwitchToFund }: PlanTabProps) => {
 
     return (
       <div key={item.id} className="flex gap-3">
-        <span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize">{item.time_block || "—"}</span>
+        <span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize"><span className="text-[10px] text-primary font-medium w-16 pt-0.5 shrink-0 capitalize">{item.time_block || "-"}</span></span>
         <div className="flex-1">
           <p className="text-sm">{item.title}</p>
           {item.description && <p className="text-[10px] text-muted-foreground">{item.description}</p>}
