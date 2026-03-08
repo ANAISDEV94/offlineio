@@ -107,7 +107,9 @@ const AiPlannerDemo: React.FC = () => {
   }, [isInView, hasPlayed, playSequence]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [visibleMessages]);
 
   const currentStep = visibleMessages.length;
