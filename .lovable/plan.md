@@ -1,52 +1,30 @@
 
 
-# Fix Budget Sync, Mobile Zoom, and Vibe Label
+# Remove All Em Dashes From the App
 
-## 3 Issues to Fix
+Replace every visible em dash (`—`) with either a regular dash (`-`), a comma, or reworded text, depending on context. Code comments are left as-is since they're not user-facing.
 
-### 1. Budget shows zero after trip creation
+## Files and Changes
 
-**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+| File | Line | Current | Replacement |
+|------|------|---------|-------------|
+| `src/pages/LandingPage.tsx` | 60 | `— all in one place` | `. All in one place` |
+| `src/pages/LandingPage.tsx` | 221 | `itinerary — activities, dining, logistics — tailored` | `itinerary: activities, dining, logistics, tailored` |
+| `src/pages/LandingPage.tsx` | 224 | `payment rules — so the organizer` | `payment rules so the organizer` |
+| `src/pages/LandingPage.tsx` | 269 | `coordination — so all you` | `coordination, so all you` |
+| `src/pages/CreateTrip.tsx` | 252 | `{steps.length} — {steps[step]}` | `{steps.length} - {steps[step]}` |
+| `src/pages/CreateTrip.tsx` | 577 | `Skip — Start Fresh` | `Skip - Start Fresh` |
+| `src/components/tabs/FundTab.tsx` | 349 | `{dashboard.health_score}% — {dashboard.health_label}` | `{dashboard.health_score}% - {dashboard.health_label}` |
+| `src/components/tabs/FundTab.tsx` | 395 | `Pay Full Balance — $` | `Pay Full Balance - $` |
+| `src/components/tabs/FundTab.tsx` | 399 | `Pay Installment — $` | `Pay Installment - $` |
+| `src/components/tabs/PlanTab.tsx` | 26 | `return "—"` | `return "-"` |
+| `src/components/tabs/PlanTab.tsx` | 358 | `\|\| "—"` | `\|\| "-"` |
+| `src/components/tabs/SettingsTab.tsx` | 141 | `\|\| "—"` | `\|\| "-"` |
+| `src/pages/AdminDebug.tsx` | 20 | `let hostname = "—"` | `let hostname = "-"` |
+| `src/components/overview/FundingSummaryCard.tsx` | 191 | `Pay Now — $` | `Pay Now - $` |
+| `src/components/overview/PaymentDeadlineCard.tsx` | 18 | `days left — ${format(...)` | `days left - ${format(...)` |
 
-**Fix**: Calculate and include `total_cost` in the insert statement:
-```
-total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
-```
+Code comments (e.g. in `AiPlannerDemo.tsx`, `stripe-webhook/index.ts`, `create-checkout/index.ts`, `main.tsx`) are not user-visible and will be left unchanged.
 
-This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
-
-### 2. Mobile zoom on input focus
-
-**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
-
-**Fix**: Update the viewport meta tag to:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-```
-
-### 3. Vibe card shows "Life" next to the emoji
-
-**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
-
-**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
-
-Updated `vibeOptions`:
-```typescript
-{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
-// same pattern for all options
-```
-
-Updated card rendering (replacing lines 516-517):
-```tsx
-<span className="text-2xl">{v.emoji}</span>
-<p className="text-sm font-medium mt-1">{v.label}</p>
-```
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
-| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
-| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+**12 files touched, ~15 single-character/word replacements. No logic changes.**
 
