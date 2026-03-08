@@ -23,7 +23,7 @@ interface PlanTabProps {
 }
 
 const formatTime = (time: string | null) => {
-  if (!time) return "—";
+  if (!time) return "-";
   try {
     const [h, m] = time.split(":");
     const hour = parseInt(h);
