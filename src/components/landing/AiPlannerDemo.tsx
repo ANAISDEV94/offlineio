@@ -176,7 +176,7 @@ const AiPlannerDemo: React.FC = () => {
               </motion.div>
             ))}
           </AnimatePresence>
-          <div ref={chatEndRef} />
+          
         </div>
 
         {/* Progress indicator */}
