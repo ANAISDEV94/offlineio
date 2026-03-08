@@ -1,36 +1,52 @@
 
 
-# Landing Page Updates
+# Fix Budget Sync, Mobile Zoom, and Vibe Label
 
-Four changes across two files. The Trip Drama Simulator is already implemented, so that item is done.
+## 3 Issues to Fix
 
-## 1. Update Waitlist Section (`src/components/landing/WaitlistSignup.tsx`)
+### 1. Budget shows zero after trip creation
 
-- Title: "Join Early Access" (was "Join the private beta")
-- Subtitle label: "Early Access" stays
-- Description updated to the new copy about testing with early users
-- Button text: "Join Early Access" (was "Get Early Access")
-- Success message updated to: "You're on the list! You can also explore the beta while we continue improving the experience."
-- Backend/form logic unchanged
+**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
 
-## 2. Add Beta Payment Notice (`src/pages/LandingPage.tsx`)
+**Fix**: Calculate and include `total_cost` in the insert statement:
+```
+total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
+```
 
-Insert a small info banner between the Lifestyle CTA and the Waitlist section. Light background (`bg-secondary/30`), rounded card, with:
-- Title: "Beta Notice" (bold)
-- Test card details (4242..., any future date, any CVC, any ZIP)
-- Friendly tone, compact design
+This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
 
-## 3. Add Footer Beta Disclaimer (`src/pages/LandingPage.tsx`)
+### 2. Mobile zoom on input focus
 
-Add a line in the footer below the copyright:
-> "Offline is currently in beta. Features may change as we continue testing and improving the experience."
+**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
 
-Small muted text, consistent with existing footer styling.
+**Fix**: Update the viewport meta tag to:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+```
+
+### 3. Vibe card shows "Life" next to the emoji
+
+**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
+
+**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
+
+Updated `vibeOptions`:
+```typescript
+{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
+// same pattern for all options
+```
+
+Updated card rendering (replacing lines 516-517):
+```tsx
+<span className="text-2xl">{v.emoji}</span>
+<p className="text-sm font-medium mt-1">{v.label}</p>
+```
 
 ## Files Changed
 
-| File | Changes |
-|------|---------|
-| `src/components/landing/WaitlistSignup.tsx` | Update title, description, button text, success message |
-| `src/pages/LandingPage.tsx` | Add beta payment notice section, add footer disclaimer line |
+| File | Change |
+|------|--------|
+| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
+| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
+| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
 

@@ -70,10 +70,10 @@ const WaitlistSignup = () => {
             Early Access
           </motion.p>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-semibold">
-            Join the private beta
+            Join Early Access
           </motion.h2>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground max-w-md mx-auto">
-            We're opening early access for groups planning trips in 2026. Get early access and help shape the product.
+            We're testing Offline with early users who want to plan group trips without the money drama. Leave your email to get updates and help shape the product.
           </motion.p>
         </motion.div>
 
@@ -84,8 +84,8 @@ const WaitlistSignup = () => {
             className="text-center space-y-3 py-8"
           >
             <CheckCircle2 className="h-10 w-10 text-primary mx-auto" />
-            <p className="font-display text-xl font-semibold">You're on the list.</p>
-            <p className="text-muted-foreground">We'll invite you soon.</p>
+            <p className="font-display text-xl font-semibold">You're on the list!</p>
+            <p className="text-muted-foreground">You can also explore the beta while we continue improving the experience.</p>
           </motion.div>
         ) : (
           <motion.form
@@ -126,7 +126,7 @@ const WaitlistSignup = () => {
                 disabled={loading}
                 className="w-full rounded-full gap-2"
               >
-                {loading ? "Joining…" : "Get Early Access"} <ArrowRight className="h-4 w-4" />
+                {loading ? "Joining…" : "Join Early Access"} <ArrowRight className="h-4 w-4" />
               </Button>
             </motion.div>
           </motion.form>
