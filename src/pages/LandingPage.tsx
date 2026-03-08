@@ -263,7 +263,7 @@ const LandingPage = () => {
             custom={0}
             className="font-display text-3xl sm:text-4xl lg:text-5xl font-semibold text-primary-foreground leading-tight mb-4"
           >
-            Travel with your girls. Leave the stress at home.
+            Travel with your girls. Leave the drama at home.
           </motion.h2>
           <motion.p variants={fadeUp} custom={1} className="text-primary-foreground/80 text-lg mb-8 max-w-lg mx-auto">
             offline handles the planning, the payments, and the coordination — so all you have to do is show up.
