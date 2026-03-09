@@ -90,10 +90,6 @@ const TripsBeingPlanned = () => (
                     loading="lazy"
                   />
                 </AspectRatio>
-                {/* Emoji badge */}
-                <span className="absolute top-3 right-3 text-xl bg-background/80 backdrop-blur-sm rounded-full w-9 h-9 flex items-center justify-center shadow-sm">
-                  {trip.emoji}
-                </span>
               </div>
 
               {/* Info */}
