@@ -169,6 +169,17 @@ const FundTab = ({ tripId }: FundTabProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Beta Notice */}
+      <div className="rounded-xl border border-border/40 bg-secondary/30 p-4 space-y-1.5">
+        <p className="font-medium text-xs">🧪 Beta Notice</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          No real payments are processed. Use Stripe's test card:
+        </p>
+        <div className="text-xs text-muted-foreground font-mono bg-background/60 rounded-lg p-2.5 space-y-0.5">
+          <p>Card: 4242 4242 4242 4242</p>
+          <p>Exp: any future date · CVC: any 3 digits</p>
+        </div>
+      </div>
       {/* How Funding + Booking Works */}
       <Card className="border-0 shadow-sm bg-primary/5">
         <CardContent className="p-4 space-y-3">
