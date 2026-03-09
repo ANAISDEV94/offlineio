@@ -100,7 +100,7 @@ const TripsBeingPlanned = () => (
                     <Users className="h-3.5 w-3.5" /> {trip.friends} friends
                   </span>
                   <span className="flex items-center gap-1">
-                    <DollarSign className="h-3.5 w-3.5" /> {trip.budget} each
+                    {trip.budget} each
                   </span>
                 </div>
               </CardContent>
