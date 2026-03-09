@@ -1,52 +1,70 @@
 
+Recommendation: Go with one image per trip card (not a separate carousel) for this section.
 
-# Fix Budget Sync, Mobile Zoom, and Vibe Label
+Why:
+- Stronger social proof: each trip feels “real” and specific.
+- Faster comprehension: users immediately connect image + destination + group size + budget.
+- Cleaner mobile UX: no swipe interaction inside an already scroll-heavy landing page.
+- Better visual rhythm with your current card grid and section flow.
 
-## 3 Issues to Fix
+Use carousel only if you want a future “inspiration gallery” section elsewhere.
 
-### 1. Budget shows zero after trip creation
+Proposed layout
 
-**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+```text
+[Trips People Are Planning]
+[subtitle]
 
-**Fix**: Calculate and include `total_cost` in the insert statement:
-```
-total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
-```
+Mobile (1 col or 2 col):
+┌─────────────────────────┐
+│ [image 16:10]           │
+│ Miami Girls Trip        │
+│ 👥 5 friends  📍$1,200  │
+└─────────────────────────┘
+(repeat)
 
-This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
-
-### 2. Mobile zoom on input focus
-
-**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
-
-**Fix**: Update the viewport meta tag to:
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-```
-
-### 3. Vibe card shows "Life" next to the emoji
-
-**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
-
-**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
-
-Updated `vibeOptions`:
-```typescript
-{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
-// same pattern for all options
+Desktop (4 cols):
+┌────card────┐ ┌────card────┐ ┌────card────┐ ┌────card────┐
+│ image      │ │ image      │ │ image      │ │ image      │
+│ title      │ │ title      │ │ title      │ │ title      │
+│ meta row   │ │ meta row   │ │ meta row   │ │ meta row   │
+└────────────┘ └────────────┘ └────────────┘ └────────────┘
 ```
 
-Updated card rendering (replacing lines 516-517):
-```tsx
-<span className="text-2xl">{v.emoji}</span>
-<p className="text-sm font-medium mt-1">{v.label}</p>
-```
+Implementation plan
+1) Upgrade current trip data model in `TripsBeingPlanned.tsx`  
+- Add `image` and `alt` fields for each trip item.
+- Keep emoji as a small overlay badge (optional) so you retain playful personality.
 
-## Files Changed
+2) Card structure update  
+- Add a top media area using your existing `AspectRatio` component (16/10 or 4/3).
+- Image uses `object-cover`, rounded top corners, subtle hover zoom on desktop.
+- Keep existing title/friends/budget block under image.
 
-| File | Change |
-|------|--------|
-| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
-| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
-| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
+3) Responsive behavior  
+- Recommended grid: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` for cleaner mobile readability.
+- If you want denser mobile, keep 2 columns but slightly reduce text size/padding.
 
+4) Visual consistency  
+- Reuse existing card styling (`rounded-2xl`, soft shadow, border-0).
+- Match section background and animation pattern already in place.
+- Keep icon row (`Users`, budget icon) exactly as your current aesthetic.
+
+5) Image sourcing strategy (important)  
+- Best: upload 4 curated images (one per destination/vibe).
+- If using Pinterest inspiration, avoid hotlinking and verify usage rights.
+- Prefer owned assets or royalty-free sources (Unsplash/Pexels) and place in `src/assets`.
+
+Technical details
+- File to update: `src/components/landing/TripsBeingPlanned.tsx`
+- Optional new assets:
+  - `src/assets/trips/miami.jpg`
+  - `src/assets/trips/cabo.jpg`
+  - `src/assets/trips/tulum.jpg`
+  - `src/assets/trips/nyc.jpg`
+- Components already available and ideal:
+  - `Card`, `CardContent`
+  - `AspectRatio` (`src/components/ui/aspect-ratio.tsx`)
+- Keep section position unchanged in `LandingPage.tsx` (already correctly placed between How It Works and See It In Action).
+
+If you want, next step I can implement version A (image-per-card) and then optionally add version B toggle for “carousel mode” behind a prop so you can compare both in preview quickly.
