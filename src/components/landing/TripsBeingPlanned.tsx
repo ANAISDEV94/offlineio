@@ -23,7 +23,7 @@ const TRIPS = [
     friends: 5,
     budget: "$1,200",
     image: miamiImg,
-    alt: "Miami Beach aerial view with turquoise ocean and palm trees",
+    alt: "Girlfriends walking Miami streets at night in sparkly dresses",
   },
   {
     destination: "Cabo Birthday Weekend",
@@ -31,7 +31,7 @@ const TRIPS = [
     friends: 7,
     budget: "$1,500",
     image: caboImg,
-    alt: "Cabo San Lucas sunset over the ocean with iconic rock formations",
+    alt: "Girlfriends in white robes drinking by the pool",
   },
   {
     destination: "Tulum Long Weekend",
@@ -39,7 +39,7 @@ const TRIPS = [
     friends: 4,
     budget: "$900",
     image: tulumImg,
-    alt: "Tulum boho cenote pool surrounded by jungle",
+    alt: "Girlfriends at a beach club in Tulum",
   },
   {
     destination: "NYC Birthday Trip",
@@ -47,7 +47,7 @@ const TRIPS = [
     friends: 6,
     budget: "$1,100",
     image: nycImg,
-    alt: "NYC rooftop bar with Manhattan skyline at night",
+    alt: "Girlfriends crossing a NYC street at night",
   },
 ];
 
