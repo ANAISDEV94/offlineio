@@ -559,6 +559,42 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_connect_accounts: {
+        Row: {
+          account_type: string
+          charges_enabled: boolean
+          created_at: string
+          id: string
+          onboarding_completed: boolean
+          payouts_enabled: boolean
+          stripe_account_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_type?: string
+          charges_enabled?: boolean
+          created_at?: string
+          id?: string
+          onboarding_completed?: boolean
+          payouts_enabled?: boolean
+          stripe_account_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_type?: string
+          charges_enabled?: boolean
+          created_at?: string
+          id?: string
+          onboarding_completed?: boolean
+          payouts_enabled?: boolean
+          stripe_account_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       trip_documents: {
         Row: {
           created_at: string
@@ -747,8 +783,10 @@ export type Database = {
           cover_image_url: string | null
           created_at: string
           created_by: string
+          currency: string
           destination: string
           end_date: string
+          funded_amount: number
           group_size: number
           host_bio: string | null
           id: string
@@ -761,6 +799,7 @@ export type Database = {
           payment_deadline: string | null
           per_person_budget: number
           start_date: string
+          status: string
           total_cost: number
           trip_description: string | null
           updated_at: string
@@ -771,8 +810,10 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           created_by: string
+          currency?: string
           destination: string
           end_date: string
+          funded_amount?: number
           group_size?: number
           host_bio?: string | null
           id?: string
@@ -785,6 +826,7 @@ export type Database = {
           payment_deadline?: string | null
           per_person_budget?: number
           start_date: string
+          status?: string
           total_cost?: number
           trip_description?: string | null
           updated_at?: string
@@ -795,8 +837,10 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           created_by?: string
+          currency?: string
           destination?: string
           end_date?: string
+          funded_amount?: number
           group_size?: number
           host_bio?: string | null
           id?: string
@@ -809,6 +853,7 @@ export type Database = {
           payment_deadline?: string | null
           per_person_budget?: number
           start_date?: string
+          status?: string
           total_cost?: number
           trip_description?: string | null
           updated_at?: string
@@ -871,6 +916,36 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          created_at: string
+          event_type: string | null
+          id: string
+          payload: Json | null
+          processed: boolean
+          processed_at: string | null
+          stripe_event_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          payload?: Json | null
+          processed?: boolean
+          processed_at?: string | null
+          stripe_event_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          payload?: Json | null
+          processed?: boolean
+          processed_at?: string | null
+          stripe_event_id?: string | null
         }
         Relationships: []
       }
@@ -961,6 +1036,7 @@ export type Database = {
         Returns: boolean
       }
       recalc_trip_total: { Args: { p_trip_id: string }; Returns: number }
+      recalculate_trip_funding: { Args: { _trip_id: string }; Returns: Json }
       set_member_share_override: {
         Args: { p_amount: number; p_trip_id: string; p_user_id: string }
         Returns: undefined
