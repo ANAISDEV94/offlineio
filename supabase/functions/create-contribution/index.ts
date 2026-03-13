@@ -9,18 +9,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, stripe-signature, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SITE_URL = Deno.env.get("SITE_URL") ?? "";
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    if (!Deno.env.get("STRIPE_SECRET_KEY")) {
-      return _json({ error: "STRIPE_SECRET_KEY not configured" }, 500);
-    }
-
     // Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -42,20 +36,16 @@ serve(async (req) => {
     const userId = claimsData.claims.sub as string;
     const userEmail = claimsData.claims.email as string | undefined;
 
-    // Parse body
     const body = await req.json();
-    const trip_id = body.trip_id ?? body.tripId;
-    const amount_cents = body.amount_cents ?? (body.amount ? Math.round(body.amount * 100) : null);
+    const tripId = body.trip_id;
+    const amountDollars = body.amount;
 
-    if (!trip_id || typeof trip_id !== "string") {
-      return _json({ error: "trip_id is required" }, 400);
+    if (!tripId) return _json({ error: "trip_id is required" }, 400);
+    if (!amountDollars || typeof amountDollars !== "number" || amountDollars <= 0) {
+      return _json({ error: "amount must be a positive number (dollars)" }, 400);
     }
-    if (!amount_cents || typeof amount_cents !== "number" || amount_cents <= 0) {
-      return _json({ error: "amount_cents must be a positive integer" }, 400);
-    }
-    if (!Number.isInteger(amount_cents)) {
-      return _json({ error: "amount_cents must be a whole number (cents)" }, 400);
-    }
+
+    const amountCents = Math.round(amountDollars * 100);
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -63,48 +53,42 @@ serve(async (req) => {
     );
 
     // Validate membership
-    const { data: membership, error: memErr } = await admin
+    const { data: membership } = await admin
       .from("trip_members")
       .select("id")
-      .eq("trip_id", trip_id)
+      .eq("trip_id", tripId)
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (memErr) return _json({ error: "Failed to verify membership" }, 500);
-    if (!membership) return _json({ error: "You are not a member of this trip" }, 403);
+    if (!membership) {
+      return _json({ error: "You are not a member of this trip" }, 403);
+    }
 
-    // Validate amount against remaining balance
+    // Validate remaining balance
     const { data: funding } = await admin
       .from("trip_member_funding")
       .select("amount_remaining, per_person_cost")
-      .eq("trip_id", trip_id)
+      .eq("trip_id", tripId)
       .eq("user_id", userId)
       .maybeSingle();
 
     const perPersonCost = Number(funding?.per_person_cost ?? 0);
     const remainingDollars = Number(funding?.amount_remaining ?? 0);
-    const remainingCents = Math.round(remainingDollars * 100);
 
-    if (perPersonCost > 0 && amount_cents > remainingCents) {
-      return _json({ error: `Amount exceeds remaining balance. You owe $${remainingDollars.toFixed(2)}.` }, 400);
+    if (perPersonCost > 0 && amountDollars > remainingDollars) {
+      return _json({ error: `Amount exceeds remaining balance ($${remainingDollars.toFixed(2)})` }, 400);
     }
-
-    // Fetch trip name
-    const { data: tripData } = await admin.from("trips").select("name").eq("id", trip_id).single();
-    const tripName = tripData?.name || "Trip";
 
     // Lookup organizer's Connect account
     const { data: organizer } = await admin
       .from("trip_members")
       .select("user_id")
-      .eq("trip_id", trip_id)
+      .eq("trip_id", tripId)
       .eq("role", "organizer")
       .maybeSingle();
 
     let connectAccountId: string | null = null;
-    let organizerId: string | null = null;
     if (organizer) {
-      organizerId = organizer.user_id;
       const { data: connectAcct } = await admin
         .from("stripe_connect_accounts")
         .select("stripe_account_id, charges_enabled")
@@ -116,60 +100,76 @@ serve(async (req) => {
       }
     }
 
-    // Create Stripe Checkout Session
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
     });
 
-    const customers = await stripe.customers.list({ email: userEmail!, limit: 1 });
-    let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-    }
+    // Check for stored payment method
+    const { data: storedPM } = await admin
+      .from("user_payment_methods")
+      .select("stripe_customer_id, stripe_payment_method_id")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    const origin = req.headers.get("origin") || SITE_URL;
+    const hasStoredPM = storedPM?.stripe_customer_id && storedPM?.stripe_payment_method_id;
 
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      customer: customerId,
-      customer_email: customerId ? undefined : userEmail!,
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `${tripName} — Payment`,
-              description: `Trip contribution — $${(amount_cents / 100).toFixed(2)}`,
-            },
-            unit_amount: amount_cents,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
+    // Build PaymentIntent params
+    const piParams: Stripe.PaymentIntentCreateParams = {
+      amount: amountCents,
+      currency: "usd",
       metadata: {
-        trip_id,
+        trip_id: tripId,
         user_id: userId,
-        organizer_id: organizerId ?? "",
+        organizer_id: organizer?.user_id ?? "",
       },
-      success_url: `${origin}/trip/${trip_id}?payment=success`,
-      cancel_url: `${origin}/trip/${trip_id}?payment=cancelled`,
     };
 
-    // Add Connect destination charge if organizer has Connect
     if (connectAccountId) {
-      sessionParams.payment_intent_data = {
-        application_fee_amount: Math.round(amount_cents * 0.025),
-        transfer_data: {
-          destination: connectAccountId,
-        },
-      };
+      piParams.application_fee_amount = Math.round(amountCents * 0.025);
+      piParams.transfer_data = { destination: connectAccountId };
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    if (hasStoredPM) {
+      piParams.customer = storedPM.stripe_customer_id!;
+      piParams.payment_method = storedPM.stripe_payment_method_id!;
+      piParams.off_session = true;
+      piParams.confirm = true;
+    } else {
+      // Need customer for client_secret flow
+      const customers = await stripe.customers.list({ email: userEmail!, limit: 1 });
+      if (customers.data.length > 0) {
+        piParams.customer = customers.data[0].id;
+      } else {
+        const newCustomer = await stripe.customers.create({ email: userEmail! });
+        piParams.customer = newCustomer.id;
+      }
+    }
 
-    return _json({ url: session.url, session_id: session.id });
+    const paymentIntent = await stripe.paymentIntents.create(piParams);
+
+    // Insert pending contribution
+    await admin.from("contributions").insert({
+      trip_id: tripId,
+      user_id: userId,
+      amount: amountDollars,
+      status: "pending",
+      stripe_payment_intent_id: paymentIntent.id,
+    });
+
+    if (hasStoredPM) {
+      return _json({
+        status: "confirmed",
+        payment_intent_id: paymentIntent.id,
+      });
+    }
+
+    return _json({
+      status: "requires_action",
+      client_secret: paymentIntent.client_secret,
+      payment_intent_id: paymentIntent.id,
+    });
   } catch (error) {
-    console.error("create-checkout error:", error);
+    console.error("create-contribution error:", error);
     return _json({ error: (error as Error).message }, 500);
   }
 });

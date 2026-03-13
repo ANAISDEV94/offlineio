@@ -1,93 +1,52 @@
 
 
-# Create/Update 6 Stripe Edge Functions + Schema Changes
+# Fix Budget Sync, Mobile Zoom, and Vibe Label
 
-## Pre-requisites: Missing Database Tables & Columns
+## 3 Issues to Fix
 
-Several tables/columns referenced in the spec don't exist yet. A migration is needed first:
+### 1. Budget shows zero after trip creation
 
-### New table: `contributions`
-Tracks individual payment intents (pending → succeeded → failed).
+**Root cause**: In `CreateTrip.tsx` line 178, the trip is inserted with `per_person_budget` set correctly, but `total_cost` is never set (defaults to `0` in the database). The dashboard reads `total_cost` to display funding info, so everything shows $0.
+
+**Fix**: Calculate and include `total_cost` in the insert statement:
 ```
-id (uuid PK), trip_id (uuid), user_id (uuid), amount (numeric),
-status (text, default 'pending' — pending/succeeded/failed),
-stripe_payment_intent_id (text, unique), stripe_session_id (text),
-created_at (timestamptz), updated_at (timestamptz)
-```
-RLS: members can view trip contributions, users can insert own.
-
-### Alter `user_payment_methods`
-Add columns: `stripe_customer_id (text)`, `stripe_payment_method_id (text)` — needed for off-session payments.
-
-### Alter `payment_history`
-Add column: `stripe_event_id (text)` — for idempotency on webhook event ID.
-
----
-
-## Edge Functions
-
-All 6 functions use `verify_jwt = false` in config.toml with manual JWT validation via `getClaims()` (except stripe-webhook which is a public endpoint with signature verification).
-
-### Function 1: `create-connect-account` (NEW)
-- Auth check via getClaims()
-- Lookup `stripe_connect_accounts` for user
-- If fully onboarded → return status
-- If exists but incomplete → refresh from Stripe API, return account link
-- If new → `stripe.accounts.create({ type: "express", capabilities: { card_payments, transfers } })`, insert row, return account link
-- Return/refresh URLs: `{origin}/settings?connect=complete` / `?connect=refresh`
-
-### Function 2: `create-account-link` (NEW)
-- Auth check, lookup `stripe_connect_accounts`
-- 404 if not found
-- Generate `stripe.accountLinks.create()` with same URLs
-
-### Function 3: `connect-account-status` (NEW)
-- Auth check, optional `{ user_id }` body (defaults to auth user)
-- Lookup + refresh from Stripe if not onboarded
-- Return status object
-
-### Function 4: `create-checkout` (UPDATE)
-- After existing validation, lookup trip's organizer from `trip_members` (role='organizer')
-- Lookup organizer's Connect account from `stripe_connect_accounts`
-- If `charges_enabled` → add `payment_intent_data.transfer_data.destination` and `payment_intent_data.application_fee_amount` (2.5%)
-- Add `organizer_id` to metadata
-
-### Function 5: `stripe-webhook` (UPDATE)
-- Log ALL events to `webhook_events` (idempotent on `stripe_event_id`)
-- `checkout.session.completed`: existing logic + insert `contributions` row, call `recalculate_trip_funding()` RPC
-- `payment_intent.succeeded`: update contribution status, call recalculate, store payment method in `user_payment_methods`
-- `payment_intent.payment_failed`: update contribution status
-- `account.updated`: update `stripe_connect_accounts` flags
-- `checkout.session.expired`: log only
-
-### Function 6: `create-contribution` (NEW)
-- Auth check, parse `{ trip_id, amount }` (dollars)
-- Validate membership + remaining balance
-- Lookup organizer's Connect account
-- Create Stripe PaymentIntent (with Connect destination if available)
-- Insert pending `contributions` row
-- If user has stored `stripe_payment_method_id` + `stripe_customer_id` → confirm off-session
-- Otherwise return `client_secret`
-
-### Config changes
-Add to `supabase/config.toml`:
-```toml
-[functions.create-connect-account]
-verify_jwt = false
-
-[functions.create-account-link]
-verify_jwt = false
-
-[functions.connect-account-status]
-verify_jwt = false
-
-[functions.create-contribution]
-verify_jwt = false
+total_cost: form.perPersonBudget * (form.visibility === "public" ? form.maxSpots : form.groupSize)
 ```
 
-## Summary of files
-- 1 migration (contributions table, alter user_payment_methods, alter payment_history)
-- 3 new edge functions (create-connect-account, create-account-link, connect-account-status, create-contribution)
-- 2 updated edge functions (create-checkout, stripe-webhook)
-- 1 config update (config.toml)
+This goes in `CreateTrip.tsx` around line 169-191 where the trip insert happens.
+
+### 2. Mobile zoom on input focus
+
+**Root cause**: The viewport meta tag in `index.html` doesn't prevent iOS Safari from zooming in when users tap on inputs (especially inputs with font-size < 16px).
+
+**Fix**: Update the viewport meta tag to:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+```
+
+### 3. Vibe card shows "Life" next to the emoji
+
+**Root cause**: In `CreateTrip.tsx` lines 516-517, the label "Soft Life" is split by spaces. The code takes everything after the first word as the "emoji" display, so "Life" appears alongside the spa emoji. Only the first word "Soft" shows below.
+
+**Fix**: Restructure `vibeOptions` in `src/lib/sample-data.ts` to have a separate `emoji` field, then update the vibe card rendering in `CreateTrip.tsx` to use it directly instead of the fragile string splitting.
+
+Updated `vibeOptions`:
+```typescript
+{ value: "soft-life", label: "Soft Life", emoji: "🧖‍♀️", color: "secondary" },
+// same pattern for all options
+```
+
+Updated card rendering (replacing lines 516-517):
+```tsx
+<span className="text-2xl">{v.emoji}</span>
+<p className="text-sm font-medium mt-1">{v.label}</p>
+```
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/pages/CreateTrip.tsx` | Add `total_cost` to trip insert; update vibe card to use `v.emoji` |
+| `src/lib/sample-data.ts` | Add `emoji` field to each vibe option |
+| `index.html` | Add `maximum-scale=1.0, user-scalable=no` to viewport meta |
 
