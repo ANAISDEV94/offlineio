@@ -107,6 +107,57 @@ export type Database = {
           },
         ]
       }
+      contributions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          status: string
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          trip_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          trip_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          trip_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contributions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trip_funding_summary"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "contributions_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       itinerary_items: {
         Row: {
           activity: string
@@ -430,6 +481,7 @@ export type Database = {
           created_at: string
           id: string
           status: string
+          stripe_event_id: string | null
           stripe_session_id: string | null
           trip_id: string
           user_id: string
@@ -439,6 +491,7 @@ export type Database = {
           created_at?: string
           id?: string
           status?: string
+          stripe_event_id?: string | null
           stripe_session_id?: string | null
           trip_id: string
           user_id: string
@@ -448,6 +501,7 @@ export type Database = {
           created_at?: string
           id?: string
           status?: string
+          stripe_event_id?: string | null
           stripe_session_id?: string | null
           trip_id?: string
           user_id?: string
@@ -871,6 +925,8 @@ export type Database = {
           card_last_four: string | null
           created_at: string
           id: string
+          stripe_customer_id: string | null
+          stripe_payment_method_id: string | null
           updated_at: string
           user_id: string
         }
@@ -882,6 +938,8 @@ export type Database = {
           card_last_four?: string | null
           created_at?: string
           id?: string
+          stripe_customer_id?: string | null
+          stripe_payment_method_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -893,6 +951,8 @@ export type Database = {
           card_last_four?: string | null
           created_at?: string
           id?: string
+          stripe_customer_id?: string | null
+          stripe_payment_method_id?: string | null
           updated_at?: string
           user_id?: string
         }
